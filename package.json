@@ -1,0 +1,23 @@
+{
+  "name": "broadwing-hr",
+  "version": "1.0.0",
+  "description": "Broadwing HR & Payroll: employees, organograms, leave, attendance (machines and mobile with geofences) and payroll for many organizations",
+  "private": true,
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js",
+    "seed:demo": "node --disable-warning=ExperimentalWarning server/demo.js"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "Usman Bin Younos",
+  "dependencies": {
+    "express": "^5.2.1",
+    "leaflet": "^1.9.4",
+    "mysql2": "^3.11.0"
+  }
+}
