@@ -64,6 +64,13 @@ module.exports = function authRoutes(r, { db, options, setCookie, SESSION_DAYS }
     };
   }
 
+  /** For the deploy workflow and uptime monitors: is the app up and can it reach its database? */
+  r.get('/health', async (req, res) => {
+    await db.value('SELECT 1');
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, version: require('../../package.json').version, database: db.dialect });
+  });
+
   r.get('/setup', async (req, res) => {
     const users = Number(await db.value('SELECT COUNT(*) AS n FROM users'));
     res.json({ needsSetup: users === 0, signup: !!options.signup });

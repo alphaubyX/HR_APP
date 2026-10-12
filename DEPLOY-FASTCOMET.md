@@ -17,12 +17,27 @@ This puts the HR app at an address like `https://hr.yourdomain.com`, as its own 
 
 The app creates its tables on first start.
 
-## 3. Upload the code
+## 3. Direct upload from GitHub
 
-1. In **File Manager**, in your home folder (not inside `public_html`), create `broadwing-hr` and `broadwing-hr-data`.
-2. Upload the contents of this repository into `broadwing-hr` (so `package.json` is directly inside it). You don't need `node_modules`, `test` or `agent`.
+Every push to `main` runs the tests and then uploads the changed files straight into the app folder on the server over FTPS, restarts the app and checks it answers. Set it up once:
 
-Or let GitHub do it: add the repository secrets `HR_FTP_SERVER`, `HR_FTP_USERNAME`, `HR_FTP_PASSWORD` and `HR_FTP_DIR` (e.g. `broadwing-hr/`). The workflow `.github/workflows/deploy.yml` then tests and uploads the app on every push to `main`.
+1. **File Manager**: in your home folder (not inside `public_html`) create `broadwing-hr` (the app) and `broadwing-hr-data` (uploaded documents).
+2. **cPanel → FTP Accounts → Add FTP Account**: e.g. `hrdeploy@yourdomain.com`, a strong password, and set **Directory** to `broadwing-hr`. This account can only touch the HR app folder.
+3. **GitHub → HR_APP → Settings → Secrets and variables → Actions**:
+   - **Secrets** → New repository secret:
+     | Name | Value |
+     |---|---|
+     | `FTP_SERVER` | your FTP host, e.g. `ftp.yourdomain.com` (shown under *FTP Accounts → Configure FTP Client*) |
+     | `FTP_USERNAME` | `hrdeploy@yourdomain.com` |
+     | `FTP_PASSWORD` | its password |
+   - **Variables** → New repository variable: `SITE_URL` = `https://hr.yourdomain.com` (used to check the site after each upload; add it after step 5).
+4. **GitHub → Actions → "Test and upload to the web server" → Run workflow** for the first upload. After that it runs on every push to `main`.
+
+If you'd rather use an FTP account that opens higher up (e.g. your main cPanel account), also add the secret `FTP_SERVER_DIR` = `broadwing-hr/`.
+
+The upload never sends `node_modules`, `.env`, `test/`, `agent/` or your data, and only sends files that changed since the last upload.
+
+Prefer doing it by hand? Download the repository as a ZIP (**Code → Download ZIP**), upload and extract it in `broadwing-hr` so `package.json` is directly inside it.
 
 ## 4. Create the Node.js app
 
@@ -53,7 +68,7 @@ Environment variables (**Add Variable** for each):
 | `HR_SIGNUP` | `off` (or `on` to let companies sign up) |
 | `BROADWING_SSO_SECRET` | optional, see README |
 
-Click **Create**, then **Run NPM Install**, then **Restart**.
+Click **Create**. Once the first upload has finished (step 3), click **Run NPM Install**, then **Restart**.
 
 ## 5. HTTPS
 
@@ -74,7 +89,7 @@ To start another organization: **All organizations → New organization**.
 
 ## Updating later
 
-Upload the new files over the old ones (or let the GitHub workflow do it), then **Run NPM Install** (only if `package.json` changed) and **Restart**. Database upgrades run automatically. Your data in MySQL and `broadwing-hr-data` is not touched.
+Push to `main`: the workflow tests and uploads, and the app restarts by itself. Only when `package.json` changed (new libraries) click **Run NPM Install** and **Restart** in Setup Node.js App. Database upgrades run automatically. Your data in MySQL and `broadwing-hr-data` is not touched.
 
 ## Backups
 

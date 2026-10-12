@@ -1,9 +1,18 @@
-name: Deploy HR app to FastComet
+name: Test and upload to the web server
 
-# Tests the app and uploads it by FTP to its Node.js app folder on the server.
-# Needs these repository secrets: HR_FTP_SERVER, HR_FTP_USERNAME, HR_FTP_PASSWORD, and
-# HR_FTP_DIR (the app folder relative to the FTP login, e.g. "broadwing-hr/").
-# Until they are set, this workflow does nothing.
+# Every push to main: run the tests, then upload the changed files straight to the HR app's folder
+# on the web server (FastComet / cPanel) over FTPS, restart the app, and check the site answers.
+#
+# Repository secrets (Settings → Secrets and variables → Actions → Secrets):
+#   FTP_SERVER      e.g. ftp.yourdomain.com (or the server's host name)
+#   FTP_USERNAME    an FTP account whose home folder IS the app folder, e.g. hrdeploy@yourdomain.com
+#   FTP_PASSWORD    its password
+#   FTP_SERVER_DIR  optional: the app folder relative to the FTP login, if the account starts higher up
+#                   (e.g. "broadwing-hr/"). Leave it out when the FTP account opens in the app folder.
+# Repository variable (same page → Variables), optional:
+#   SITE_URL        e.g. https://hr.yourdomain.com — checked after each upload.
+#
+# Without the secrets, only the tests run.
 
 on:
   push:
@@ -11,20 +20,32 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-hr
+  group: deploy
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - name: Check that FTP details are set
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  upload:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the FTP details are set
         id: check
         env:
-          SERVER: ${{ secrets.HR_FTP_SERVER }}
+          SERVER: ${{ secrets.FTP_SERVER }}
         run: |
           if [ -z "$SERVER" ]; then
-            echo "HR_FTP_SERVER is not set: skipping the HR deploy."
+            echo "::notice::FTP_SERVER secret is not set, so nothing was uploaded. Add FTP_SERVER, FTP_USERNAME and FTP_PASSWORD to deploy."
             echo "ready=false" >> "$GITHUB_OUTPUT"
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
@@ -33,37 +54,48 @@ jobs:
       - uses: actions/checkout@v4
         if: steps.check.outputs.ready == 'true'
 
-      - uses: actions/setup-node@v4
-        if: steps.check.outputs.ready == 'true'
-        with:
-          node-version: 22
-
-      - name: Test
-        if: steps.check.outputs.ready == 'true'
-        run: npm ci && npm test
-
-      - name: Restart trigger for the Node app
+      # cPanel (Passenger) restarts the Node app when tmp/restart.txt changes
+      - name: Restart trigger
         if: steps.check.outputs.ready == 'true'
         run: mkdir -p tmp && date > tmp/restart.txt
 
-      - name: Upload via FTP
+      # Only changed files are sent (the action keeps a small state file on the server).
+      # node_modules is never uploaded: cPanel manages it — click "Run NPM Install" when package.json changes.
+      - name: Upload over FTPS
         if: steps.check.outputs.ready == 'true'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.HR_FTP_SERVER }}
-          username: ${{ secrets.HR_FTP_USERNAME }}
-          password: ${{ secrets.HR_FTP_PASSWORD }}
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
           local-dir: ./
-          server-dir: ${{ secrets.HR_FTP_DIR }}
+          server-dir: ${{ secrets.FTP_SERVER_DIR || './' }}
           exclude: |
             **/.git*
             **/.git*/**
+            .github/**
             node_modules/**
             data/**
             test/**
             agent/**
             .env
-            .github/**
-            LICENSE
+            .env.example
             *.md
+            LICENSE
+
+      - name: Check the site is up
+        if: steps.check.outputs.ready == 'true' && vars.SITE_URL != ''
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          for i in 1 2 3 4 5 6; do
+            sleep 10
+            if body=$(curl -fsS --max-time 20 "${SITE_URL%/}/api/health"); then
+              echo "Site is up: $body"
+              exit 0
+            fi
+            echo "Not answering yet (try $i)…"
+          done
+          echo "::error::${SITE_URL} did not answer /api/health after the upload. Check the app's stderr.log in cPanel, or click Run NPM Install and Restart."
+          exit 1

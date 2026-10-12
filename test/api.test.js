@@ -32,6 +32,8 @@ async function signIn(username, password = PW) {
 const workday = (d) => { while (weekday(d) >= 6) d = addDays(d, 1); return d; };
 
 test('setup, sign-in and roles', async () => {
+  const health = await client(srv.base).get('/api/health');
+  assert.equal(health.ok, true);
   const me = await admin.get('/api/me');
   assert.equal(me.org.name, 'Acme Ltd');
   assert.equal(me.role, 'admin');
