@@ -90,7 +90,7 @@ function navItems() {
     ]);
   }
   g('People', [
-    (can('employees.view') || isManager()) && { path: 'employees', label: 'Employees', icon: 'users' },
+    (can('employees.view') || isManager()) && { path: 'employees', label: 'People', icon: 'users' },
     (can('employees.view') || hasEmployee()) && { path: 'organogram', label: 'Organogram', icon: 'org' },
   ]);
   g('Time', [
@@ -150,10 +150,11 @@ function drawShell() {
     h('div', { class: 'side-foot' },
       h('a', { class: 'nav-item', href: '#', onclick: (e) => { e.preventDefault(); signOut(); } }, icon('logout', 18), h('span', null, 'Sign out'))));
 
-  const searchBox = can('employees.view') || isManager() ? employeeSearch() : h('div', { class: 'grow' });
+  openSearch = null;
+  const searchBox = can('employees.view') || isManager() ? employeeSearch() : null;
   clear(shell.top,
     h('button', { class: 'icon-btn menu-btn', 'aria-label': 'Menu', onclick: () => shell.el.classList.toggle('nav-open') }, icon('menu')),
-    searchBox, h('div', { class: 'spacer' }),
+    h('div', { class: 'spacer' }), searchBox,
     h('button', { class: 'icon-btn', title: 'Theme', 'aria-label': 'Change theme', onclick: (e) => themeMenu(e.currentTarget) }, icon(document.documentElement.dataset.theme === 'dark' ? 'moon' : 'sun')),
     h('button', { class: 'icon-btn', title: 'Notifications', 'aria-label': 'Notifications', onclick: (e) => notifications(e.currentTarget) },
       icon('bell'), me.unread ? h('span', { class: 'dot' }, me.unread > 9 ? '9+' : me.unread) : null),
@@ -167,12 +168,22 @@ function drawShell() {
   clear(shell.bottom, quick.map(([p, l, ic]) => h('a', { href: `#/${p}`, class: p === path ? 'on' : '' }, icon(ic, 20), l)));
 }
 
+// "/" anywhere opens the person finder of the current top bar
+let openSearch = null;
+document.addEventListener('keydown', (e) => {
+  if (e.key === '/' && openSearch && !/input|textarea|select/i.test(document.activeElement.tagName)) { e.preventDefault(); openSearch(); }
+});
+
+/** A search button in the top bar; the box opens only when you want to find someone. */
 function employeeSearch() {
-  const input = h('input', { placeholder: 'Search people…', 'aria-label': 'Search people' });
+  const input = h('input', { placeholder: 'Find a person…', 'aria-label': 'Find a person' });
   const results = h('div', { class: 'search-results hidden' });
+  const box = h('label', { class: 'search search-pop hidden' }, icon('search', 16), input, h('span', { class: 'kbd hide-sm' }, 'Esc'), results);
+  const close = () => { box.classList.add('hidden'); results.classList.add('hidden'); input.value = ''; };
+  openSearch = () => { box.classList.remove('hidden'); input.focus(); };
   let sel = 0;
   let list = [];
-  const go = (e) => { results.classList.add('hidden'); input.value = ''; navigate(`/employees/${e.id}`); };
+  const go = (e) => { close(); navigate(`/employees/${e.id}`); };
   const draw = () => {
     const q = input.value.trim().toLowerCase();
     if (!q || !S.lookups) { results.classList.add('hidden'); return; }
@@ -185,15 +196,16 @@ function employeeSearch() {
   };
   input.addEventListener('input', () => { sel = 0; draw(); });
   input.addEventListener('focus', () => loadLookups().then(draw));
-  input.addEventListener('blur', () => setTimeout(() => results.classList.add('hidden'), 120));
+  input.addEventListener('blur', () => setTimeout(close, 150));
   input.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown') { sel = Math.min(list.length - 1, sel + 1); draw(); e.preventDefault(); }
     if (e.key === 'ArrowUp') { sel = Math.max(0, sel - 1); draw(); e.preventDefault(); }
     if (e.key === 'Enter' && list[sel]) go(list[sel]);
     if (e.key === 'Escape') input.blur();
   });
-  document.addEventListener('keydown', (e) => { if (e.key === '/' && !/input|textarea|select/i.test(document.activeElement.tagName)) { e.preventDefault(); input.focus(); } });
-  return h('label', { class: 'search' }, icon('search', 16), input, h('span', { class: 'kbd hide-sm' }, '/'), results);
+  return h('div', { class: 'search-wrap' },
+    h('button', { class: 'icon-btn', type: 'button', title: 'Find a person (/)', 'aria-label': 'Find a person', onclick: () => openSearch() }, icon('search')),
+    box);
 }
 
 function orgMenu(anchor) {
@@ -280,7 +292,7 @@ async function route() {
   if (!m) { clear(shell.content, h('div', { class: 'empty' }, h('h3', null, 'Page not found'), h('a', { href: '#/' }, 'Go to the start page'))); return; }
   try {
     const mod = await m.load();
-    if (!S.lookups && S.me.org) await loadLookups();
+    if (S.me.org) await loadLookups(); // reads them again only after a change
     if (seq !== renderSeq) return;
     await mod.default(view, m.params, query, { refreshShell: refreshCounts });
     if (seq !== renderSeq) return;

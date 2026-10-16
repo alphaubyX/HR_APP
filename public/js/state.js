@@ -20,8 +20,15 @@ export async function loadMe() {
   return S.me;
 }
 
+// After any save the lists are out of date; the next page that needs them reads them again.
+let stale = false;
+window.addEventListener('hr:data-changed', () => { stale = true; });
+
 export async function loadLookups(force = false) {
-  if (!S.lookups || force) S.lookups = await api.get('/api/lookups');
+  if (!S.lookups || force || stale) {
+    stale = false;
+    S.lookups = await api.get('/api/lookups');
+  }
   return S.lookups;
 }
 

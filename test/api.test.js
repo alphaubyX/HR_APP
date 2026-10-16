@@ -123,6 +123,39 @@ test('organogram: moving people and refusing loops', async () => {
   assert.equal(d2.manager.id, ceo);
 });
 
+test('departments and sections: approved strength, moving people and sections', async () => {
+  const fin = (await admin.post('/api/departments', { name: 'Finance', approved_strength: 3 })).id;
+  const ops = (await admin.post('/api/departments', { name: 'Ops' })).id;
+  const acc = (await admin.post('/api/sections', { department_id: fin, name: 'Accounts', approved_strength: 2 })).id;
+  assert.equal((await admin.call('POST', '/api/sections', { name: 'No department' })).status, 400);
+  const a = await newEmployee(admin, { first_name: 'Acc', last_name: 'Ountant', section_id: acc });
+  let e = await admin.get(`/api/employees/${a}`);
+  assert.equal(e.department.id, fin, 'a section sets its department');
+  assert.equal(e.section.name, 'Accounts');
+  // moving to another department leaves the section
+  await admin.put(`/api/employees/${a}`, { department_id: ops, section_id: acc });
+  e = await admin.get(`/api/employees/${a}`);
+  assert.equal(e.department.id, ops);
+  assert.equal(e.section, null);
+  // drag a person into a section on the chart
+  await admin.put(`/api/organogram/${a}/place`, { section_id: acc });
+  let chart = await admin.get('/api/organogram');
+  assert.equal(chart.people.find((p) => p.id === a).department_id, fin);
+  assert.equal(chart.sections.find((x) => x.id === acc).approved_strength, 2);
+  assert.equal(chart.departments.find((x) => x.id === fin).approved_strength, 3);
+  // drag the section to another department: its people move with it
+  await admin.put(`/api/organogram/sections/${acc}`, { department_id: ops });
+  chart = await admin.get('/api/organogram');
+  assert.equal(chart.people.find((p) => p.id === a).department_id, ops);
+  // a department with sections, or a section with people, can't be deleted
+  assert.match((await admin.call('DELETE', `/api/sections/${acc}`)).data.error, /still has people/);
+  await admin.put(`/api/organogram/${a}/place`, { department_id: fin });
+  assert.equal((await admin.get(`/api/employees/${a}`)).section, null);
+  assert.match((await admin.call('DELETE', `/api/departments/${ops}`)).data.error, /has sections/);
+  await admin.del(`/api/sections/${acc}`);
+  await admin.del(`/api/departments/${ops}`);
+});
+
 test('salary: structure, revisions and who can see it', async () => {
   const lk = await admin.get('/api/lookups');
   const id = await newEmployee(admin, { first_name: 'Sal', last_name: 'Ary' });
@@ -177,6 +210,9 @@ test('leave: two-level approval, absent manager skipped, HR fallback, balance', 
   await l.post(`/api/leave/requests/${r2.id}/decide`, { approve: false, comment: 'Busy week' });
   // the lead is on leave today: a new request skips them and goes to the boss
   const today = nowIn('Asia/Karachi').date;
+  // today may be a weekend: make every day a working day so the lead can be on leave today
+  const shift = (await admin.get('/api/shifts')).find((x) => x.is_default);
+  await admin.put(`/api/shifts/${shift.id}`, { weekly_off: '' });
   await admin.post('/api/leave/requests', { employee_id: lead, leave_type_id: lk.leaveTypes.find((t) => t.code === 'CL').id, from_date: today, to_date: today, approve_now: true });
   const r3 = await s.post('/api/leave/requests', { leave_type_id: AL, from_date: workday(addDays(from, 7)) });
   const detail = await s.get(`/api/leave/requests/${r3.id}`);
@@ -195,6 +231,7 @@ test('leave: two-level approval, absent manager skipped, HR fallback, balance', 
   assert.equal(pr.status, 400);
   assert.match(pr.data.error, /after probation/);
   await admin.put('/api/org/settings', { leave_approval_levels: 1 });
+  await admin.put(`/api/shifts/${shift.id}`, { weekly_off: shift.weekly_off });
 });
 
 test('leave: escalation after waiting too long', async () => {

@@ -135,11 +135,27 @@ const TABLES = {
       parent_id: 'int',
       head_employee_id: 'int',
       color: 'str:20',
+      approved_strength: 'int', // sanctioned headcount (null = not set)
       sort: 'int!=0',
       active: 'bool!=1',
       created_at: 'datetime!',
     },
     indexes: [['org_id']],
+  },
+  sections: {
+    cols: {
+      id: 'id',
+      org_id: 'int!',
+      department_id: 'int!',
+      name: 'str:120!',
+      code: 'str:30',
+      head_employee_id: 'int',
+      approved_strength: 'int',
+      sort: 'int!=0',
+      active: 'bool!=1',
+      created_at: 'datetime!',
+    },
+    indexes: [['org_id,department_id']],
   },
   designations: {
     cols: { id: 'id', org_id: 'int!', name: 'str:120!', grade_id: 'int', sort: 'int!=0', active: 'bool!=1' },
@@ -212,6 +228,7 @@ const TABLES = {
       emergency_relation: 'str:60',
       photo: 'text', // small data URL
       department_id: 'int',
+      section_id: 'int', // a section inside the department
       designation_id: 'int',
       grade_id: 'int',
       branch_id: 'int',

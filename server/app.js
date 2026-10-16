@@ -53,6 +53,9 @@ async function createApp(options) {
   // Attendance machines (ZKTeco "ADMS" push) talk plain text at /iclock, before any JSON parsing.
   app.use('/iclock', express.text({ type: () => true, limit: '5mb' }), require('./routes/iclock')(db));
 
+  // Answers depend on who is signed in and change all the time: never let the browser, the web
+  // server (e.g. LiteSpeed cache on shared hosting) or a proxy keep a copy.
+  app.use('/api', (req, res, next) => { res.set({ 'Cache-Control': 'no-store, private', 'X-LiteSpeed-Cache-Control': 'no-cache' }); next(); });
   app.use('/api', express.json({ limit: '8mb' }));
 
   /* Who is calling: a session cookie (web) or a bearer token (phone app / integrations). */

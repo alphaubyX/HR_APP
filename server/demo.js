@@ -89,6 +89,10 @@ async function seed(base, db, { tz = 'Asia/Karachi' } = {}) {
   }
   await put(`/api/departments/${mgmt}`, { head_employee_id: ids.Usman });
   for (const [name, head] of [['Sales', 'Bilal'], ['Finance', 'Hina'], ['Operations', 'Kamran'], ['Human Resources', 'Ayesha']]) await put(`/api/departments/${dept[name]}`, { head_employee_id: ids[head] });
+  for (const [name, n] of [['Sales', 6], ['Finance', 3], ['Operations', 5], ['Human Resources', 2]]) await put(`/api/departments/${dept[name]}`, { approved_strength: n });
+  await post('/api/sections', { department_id: dept.Sales, name: 'Field Sales', approved_strength: 4 });
+  await post('/api/sections', { department_id: dept.Sales, name: 'Key Accounts', approved_strength: 2 });
+  await post('/api/sections', { department_id: dept.Finance, name: 'Accounts', approved_strength: 2 });
   await post(`/api/employees/${ids.Sara}/account`, { username: 'sara', password: 'demo12345', role: 'employee' });
   await post(`/api/employees/${ids.Bilal}/account`, { username: 'bilal', password: 'demo12345', role: 'employee' });
   await post(`/api/employees/${ids.Ayesha}/account`, { username: 'ayesha', password: 'demo12345', role: 'hr' });

@@ -28,6 +28,7 @@ const PROFILE = {
 const JOB = {
   emp_code: ['str', { max: 30 }],
   department_id: ['id'],
+  section_id: ['id'],
   designation_id: ['id'],
   grade_id: ['id'],
   branch_id: ['id'],
@@ -71,11 +72,22 @@ module.exports = function employeeRoutes(r, { db, options }) {
   }
 
   /** Reference ids must belong to this organization. */
-  async function checkRefs(req, data) {
-    const refs = { department_id: 'departments', designation_id: 'designations', grade_id: 'grades', branch_id: 'branches', shift_id: 'shifts', policy_id: 'attendance_policies', manager_id: 'employees' };
+  async function checkRefs(req, data, existing = null) {
+    const refs = { department_id: 'departments', section_id: 'sections', designation_id: 'designations', grade_id: 'grades', branch_id: 'branches', shift_id: 'shifts', policy_id: 'attendance_policies', manager_id: 'employees' };
     for (const [col, table] of Object.entries(refs)) {
       if (!data[col]) continue;
       if (!(await db.get(`SELECT id FROM ${table} WHERE id = ? AND org_id = ?`, [data[col], req.org.id]))) throw bad(`${col.replace('_id', '').replace('_', ' ')} not found.`);
+    }
+    // the section decides the department; a new department without a section leaves the old section
+    if (data.section_id) {
+      const sectionDept = await db.value('SELECT department_id FROM sections WHERE id = ?', [data.section_id]);
+      // the form sent the old section with a new department: the department change wins
+      const movedAway = existing && data.section_id === existing.section_id && 'department_id' in data
+        && data.department_id !== existing.department_id && data.department_id !== sectionDept;
+      if (movedAway) data.section_id = null;
+      else data.department_id = sectionDept;
+    } else if (existing && 'department_id' in data && !('section_id' in data) && data.department_id !== existing.department_id) {
+      data.section_id = null;
     }
     if (data.device_user_id) {
       const dup = await db.get('SELECT id, first_name FROM employees WHERE org_id = ? AND device_user_id = ? AND id <> ?', [req.org.id, data.device_user_id, data.id || 0]);
@@ -107,10 +119,11 @@ module.exports = function employeeRoutes(r, { db, options }) {
   /* ------------------------------------------------------------------ list */
   r.get('/employees', inOrg, async (req, res) => {
     const scope = await employeeScope(req);
-    let sql = `SELECT e.*, d.name AS department, g.name AS designation, b.name AS branch,
+    let sql = `SELECT e.*, d.name AS department, sc.name AS section, g.name AS designation, b.name AS branch,
                  m.first_name AS manager_first, m.last_name AS manager_last
                FROM employees e
                LEFT JOIN departments d ON d.id = e.department_id
+               LEFT JOIN sections sc ON sc.id = e.section_id
                LEFT JOIN designations g ON g.id = e.designation_id
                LEFT JOIN branches b ON b.id = e.branch_id
                LEFT JOIN employees m ON m.id = e.manager_id
@@ -119,6 +132,7 @@ module.exports = function employeeRoutes(r, { db, options }) {
     if (req.query.status === 'current') sql += " AND e.status <> 'exited'";
     else if (req.query.status) { sql += ' AND e.status = ?'; params.push(String(req.query.status)); }
     if (req.query.department_id) { sql += ' AND e.department_id = ?'; params.push(Number(req.query.department_id)); }
+    if (req.query.section_id) { sql += ' AND e.section_id = ?'; params.push(Number(req.query.section_id)); }
     sql += ' ORDER BY e.first_name, e.last_name';
     let rows = await db.all(sql, params);
     if (!scope.all) rows = rows.filter((e) => scope.ids.has(e.id));
@@ -266,8 +280,9 @@ module.exports = function employeeRoutes(r, { db, options }) {
     const self = e.id === req.member.employee_id;
     const full = req.perms.has('employees.edit') || self;
     const out = serialize(e, { full });
-    const [dept, desig, branch, shift, mgr, grade] = await Promise.all([
+    const [dept, section, desig, branch, shift, mgr, grade] = await Promise.all([
       e.department_id && db.get('SELECT id, name FROM departments WHERE id = ?', [e.department_id]),
+      e.section_id && db.get('SELECT id, name FROM sections WHERE id = ?', [e.section_id]),
       e.designation_id && db.get('SELECT id, name FROM designations WHERE id = ?', [e.designation_id]),
       e.branch_id && db.get('SELECT id, name FROM branches WHERE id = ?', [e.branch_id]),
       e.shift_id && db.get('SELECT id, name, start_time, end_time FROM shifts WHERE id = ?', [e.shift_id]),
@@ -275,7 +290,7 @@ module.exports = function employeeRoutes(r, { db, options }) {
       e.grade_id && db.get('SELECT id, name FROM grades WHERE id = ?', [e.grade_id]),
     ]);
     Object.assign(out, {
-      department: dept || null, designation: desig || null, branch: branch || null, shift: shift || null, grade: grade || null,
+      department: dept || null, section: section || null, designation: desig || null, branch: branch || null, shift: shift || null, grade: grade || null,
       manager: mgr ? { id: mgr.id, name: fullName(mgr), emp_code: mgr.emp_code } : null,
     });
     out.reports = (await db.all("SELECT id, first_name, last_name, emp_code FROM employees WHERE org_id = ? AND manager_id = ? AND status <> 'exited' ORDER BY first_name", [req.org.id, e.id]))
@@ -294,7 +309,7 @@ module.exports = function employeeRoutes(r, { db, options }) {
     const data = pick(req.body, { ...PROFILE, ...JOB, ...BANK }, { partial: true });
     for (const k of ['first_name', 'join_date', 'employment_type', 'remote_attendance', 'payment_method', 'probation_days']) if (data[k] === null) delete data[k];
     data.id = e.id;
-    await checkRefs(req, data);
+    await checkRefs(req, data, e);
     delete data.id;
     if ('manager_id' in data) await checkManager(req, e.id, data.manager_id);
     if ('emp_code' in data && !data.emp_code) delete data.emp_code;
@@ -311,6 +326,7 @@ module.exports = function employeeRoutes(r, { db, options }) {
     data.updated_at = utcNow();
     const changes = [];
     if ('department_id' in data && data.department_id !== e.department_id) changes.push('department');
+    else if ('section_id' in data && data.section_id !== e.section_id) changes.push('section');
     if ('designation_id' in data && data.designation_id !== e.designation_id) changes.push('designation');
     if ('branch_id' in data && data.branch_id !== e.branch_id) changes.push('branch');
     if ('manager_id' in data && data.manager_id !== e.manager_id) changes.push('line manager');
@@ -337,7 +353,7 @@ module.exports = function employeeRoutes(r, { db, options }) {
   r.get('/organogram', inOrg, async (req, res) => {
     const scope = await employeeScope(req);
     const rows = await db.all(
-      `SELECT e.id, e.emp_code, e.first_name, e.last_name, e.manager_id, e.department_id, e.designation_id, e.branch_id, e.status, e.photo,
+      `SELECT e.id, e.emp_code, e.first_name, e.last_name, e.manager_id, e.department_id, e.section_id, e.designation_id, e.branch_id, e.status, e.photo,
          d.name AS department, d.color AS department_color, g.name AS designation
        FROM employees e LEFT JOIN departments d ON d.id = e.department_id LEFT JOIN designations g ON g.id = e.designation_id
        WHERE e.org_id = ? AND e.status <> 'exited' ORDER BY e.first_name`, [req.org.id]);
@@ -353,7 +369,9 @@ module.exports = function employeeRoutes(r, { db, options }) {
     res.json({
       canEdit: req.perms.has('employees.edit'),
       people: visible.map((x) => ({ ...x, name: fullName(x) })),
-      departments: await db.all('SELECT id, name, code, parent_id, head_employee_id, color, sort FROM departments WHERE org_id = ? AND active = 1 ORDER BY sort, name', [req.org.id]),
+      canManage: req.perms.has('org.manage'),
+      departments: await db.all('SELECT id, name, code, parent_id, head_employee_id, color, approved_strength, sort FROM departments WHERE org_id = ? AND active = 1 ORDER BY sort, name', [req.org.id]),
+      sections: await db.all('SELECT id, department_id, name, code, head_employee_id, approved_strength, sort FROM sections WHERE org_id = ? AND active = 1 ORDER BY sort, name', [req.org.id]),
     });
   });
 
@@ -376,6 +394,42 @@ module.exports = function employeeRoutes(r, { db, options }) {
       if (managerId) await notifyEmployees(db, req.org.id, [managerId], `${fullName(e)} now reports to you`, null, `#/employees/${e.id}`);
     }
     await audit(db, req, 'organogram.move', 'employees', e.id, data);
+    res.json({ ok: true });
+  });
+
+  /** Departments chart: drop a person into a department or one of its sections. */
+  r.put('/organogram/:id/place', need('employees.edit'), async (req, res) => {
+    const e = await load(req, req.params.id);
+    const data = pick(req.body, { department_id: ['id'], section_id: ['id'] });
+    await checkRefs(req, data, e);
+    if (!data.department_id) throw bad('Choose a department.');
+    if (!data.section_id) data.section_id = null;
+    if (data.department_id === e.department_id && data.section_id === e.section_id) { res.json({ ok: true }); return; }
+    await db.update('employees', { id: e.id }, { ...data, updated_at: utcNow() });
+    const where = await db.value('SELECT name FROM departments WHERE id = ?', [data.department_id]);
+    const sec = data.section_id ? await db.value('SELECT name FROM sections WHERE id = ?', [data.section_id]) : null;
+    await addEvent(db, req, e.id, 'transfer', nowIn(req.org.timezone).date, `Moved to ${sec ? `${where} › ${sec}` : where}`,
+      { from: { department_id: e.department_id, section_id: e.section_id } });
+    await audit(db, req, 'organogram.place', 'employees', e.id, data);
+    res.json({ ok: true });
+  });
+
+  /** Departments chart: drag a section to another department, or set its head. */
+  r.put('/organogram/sections/:id', need('employees.edit', 'org.manage'), async (req, res) => {
+    const s = await db.get('SELECT * FROM sections WHERE id = ? AND org_id = ?', [req.params.id, req.org.id]);
+    if (!s) throw notFound('Section');
+    const data = pick(req.body, { department_id: ['id'], head_employee_id: ['id'] }, { partial: true });
+    if ('department_id' in data) {
+      if (!data.department_id || !(await db.get('SELECT id FROM departments WHERE id = ? AND org_id = ?', [data.department_id, req.org.id]))) throw bad('Department not found.');
+    }
+    if (data.head_employee_id) await load(req, data.head_employee_id);
+    await db.tx(async (t) => {
+      await t.update('sections', { id: s.id }, data);
+      if (data.department_id && data.department_id !== s.department_id) {
+        await t.run('UPDATE employees SET department_id = ? WHERE org_id = ? AND section_id = ?', [data.department_id, req.org.id, s.id]);
+      }
+    });
+    await audit(db, req, 'organogram.section', 'sections', s.id, data);
     res.json({ ok: true });
   });
 
@@ -505,6 +559,7 @@ module.exports = function employeeRoutes(r, { db, options }) {
       await t.run('UPDATE punches SET employee_id = NULL WHERE employee_id = ?', [e.id]);
       await t.run('UPDATE memberships SET employee_id = NULL WHERE employee_id = ?', [e.id]);
       await t.run('UPDATE departments SET head_employee_id = NULL WHERE head_employee_id = ?', [e.id]);
+      await t.run('UPDATE sections SET head_employee_id = NULL WHERE head_employee_id = ?', [e.id]);
       await t.run('DELETE FROM employees WHERE id = ?', [e.id]);
     });
     await audit(db, req, 'employees.delete', 'employees', e.id, { name: fullName(e), emp_code: e.emp_code });

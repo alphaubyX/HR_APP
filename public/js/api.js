@@ -13,6 +13,7 @@ async function request(method, url, body) {
     res = await fetch(url, {
       method,
       credentials: 'same-origin',
+      cache: 'no-store', // always the latest data, never a stored copy
       headers: body === undefined ? {} : { 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -25,6 +26,8 @@ async function request(method, url, body) {
     if (res.status === 401 && !url.startsWith('/api/login')) window.dispatchEvent(new Event('hr:signed-out'));
     throw new ApiError(res.status, (data && data.error) || `Request failed (${res.status})`);
   }
+  // something was saved: lists kept in the page (departments, people …) must be read again
+  if (method !== 'GET' && !url.startsWith('/api/login')) window.dispatchEvent(new Event('hr:data-changed'));
   return data;
 }
 

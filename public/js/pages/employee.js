@@ -20,7 +20,7 @@ export default async function employeePage(view, params) {
     actions.push(h('a', { class: 'btn', href: `#/employees/${e.id}/edit` }, icon('edit', 16), 'Edit'));
     actions.push(h('button', { class: 'btn', 'aria-label': 'More actions', onclick: (ev) => moreMenu(ev.currentTarget, e, reload) }, icon('more', 16)));
   }
-  view.append(pageHead(e.name, { crumbs: [{ label: can('employees.view') ? 'Employees' : 'My team', href: '#/employees' }, { label: e.name }], actions }));
+  view.append(pageHead(e.name, { crumbs: [{ label: can('employees.view') ? 'People' : 'My team', href: '#/employees' }, { label: e.name }], actions }));
 
   view.append(h('div', { class: 'card mb-16' }, h('div', { class: 'profile-hero' },
     avatar(e.name, { size: 'xl', photo: e.photo }),
@@ -72,7 +72,7 @@ async function overview(body, e, reload) {
   const right = h('div', { class: 'col gap-16' });
   body.append(h('div', { class: 'grid grid-side' }, left, right));
   left.append(card('Job', kv([
-    ['Employee number', e.emp_code], ['Designation', e.designation && e.designation.name], ['Department', e.department && e.department.name],
+    ['Employee number', e.emp_code], ['Designation', e.designation && e.designation.name], ['Department', e.department && e.department.name], ['Section', e.section && e.section.name],
     ['Grade', e.grade && e.grade.name], ['Branch', e.branch && e.branch.name], ['Line manager', e.manager ? h('a', { href: `#/employees/${e.manager.id}` }, e.manager.name) : 'Top of the organogram'],
     ['Employment type', sentence(e.employment_type)], ['Joined', date(e.join_date)],
     e.probation_end ? ['Probation', `${e.probation_days} days, ${e.status === 'probation' ? 'ends' : 'ended'} ${date(e.probation_end)}`] : null,

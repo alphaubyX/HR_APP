@@ -44,7 +44,7 @@ export default async function employees(view, params, query) {
   if (can('reports.view')) actions.push(h('button', { class: 'btn', onclick: () => download('/api/reports/headcount.csv') }, icon('download', 16), 'Export'));
   if (can('employees.edit')) actions.push(h('button', { class: 'btn', onclick: () => importDialog(load) }, icon('upload', 16), 'Import'));
   if (can('employees.edit')) actions.push(h('a', { class: 'btn primary', href: '#/employees/new' }, icon('plus', 16), 'Add employee'));
-  view.append(pageHead(can('employees.view') ? 'Employees' : 'My team', { sub: 'Everyone in your organization, from onboarding to exit.', actions }));
+  view.append(pageHead(can('employees.view') ? 'People' : 'My team', { sub: 'Everyone in your organization, from onboarding to exit.', actions }));
 
   const deptSelect = h('select', { class: 'input sm', style: { width: '200px' }, onchange: (e) => { dept = e.target.value; load(); } },
     h('option', { value: '' }, 'All departments'), options('departments').map(([id, n]) => h('option', { value: id, selected: String(id) === String(dept) }, n)));
@@ -65,7 +65,7 @@ export default async function employees(view, params, query) {
       columns: [
         { key: 'name', label: 'Employee', sort: (r) => r.name, text: (r) => `${r.name} ${r.emp_code}`, render: (r) => person(r.name, r.emp_code, { photo: r.photo, id: r.id }) },
         { key: 'designation', label: 'Designation', sort: true, render: (r) => r.designation || h('span', { class: 'faint' }, '—') },
-        { key: 'department', label: 'Department', sort: true, render: (r) => r.department || h('span', { class: 'faint' }, '—') },
+        { key: 'department', label: 'Department', sort: true, render: (r) => (r.department ? h('div', null, r.department, r.section ? h('div', { class: 'tiny muted' }, r.section) : null) : h('span', { class: 'faint' }, '—')) },
         { key: 'manager', label: 'Line manager', sort: true, className: 'hide-sm', render: (r) => r.manager || h('span', { class: 'faint' }, '—') },
         { key: 'join_date', label: 'Joined', sort: true, className: 'hide-sm', render: (r) => date(r.join_date) },
         { key: 'status', label: 'Status', sort: true, render: (r) => h('div', { class: 'col gap-4', style: { alignItems: 'flex-start' } }, empStatus(r.status),

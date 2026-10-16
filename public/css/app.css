@@ -98,8 +98,8 @@ img { max-width: 100%; }
 .col { display: flex; flex-direction: column; gap: 8px; }
 .grow { flex: 1; min-width: 0; }
 .spacer { flex: 1; }
-.gap-4 { gap: 4px; } .gap-12 { gap: 12px; } .gap-16 { gap: 16px; }
-.mt-8 { margin-top: 8px; } .mt-16 { margin-top: 16px; } .mt-24 { margin-top: 24px; } .mb-8 { margin-bottom: 8px; } .mb-16 { margin-bottom: 16px; }
+.gap-4 { gap: 4px; } .gap-8 { gap: 8px; } .gap-12 { gap: 12px; } .gap-16 { gap: 16px; }
+.mt-8 { margin-top: 8px; } .mt-16 { margin-top: 16px; } .mt-24 { margin-top: 24px; } .mb-4 { margin-bottom: 4px; } .mb-8 { margin-bottom: 8px; } .mb-16 { margin-bottom: 16px; }
 .hidden { display: none !important; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
@@ -150,6 +150,9 @@ img { max-width: 100%; }
   display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   padding: 0 10px; height: 36px; width: min(380px, 40vw); color: var(--muted); position: relative;
 }
+.search-wrap { position: relative; }
+.search.search-pop { position: absolute; right: 0; top: 44px; width: min(380px, calc(100vw - 32px)); z-index: 60; box-shadow: var(--shadow-lg); }
+.search.search-pop.hidden { display: none; }
 .search input { border: 0; outline: 0; background: transparent; flex: 1; min-width: 0; color: var(--text); }
 .search-results {
   position: absolute; top: 40px; left: 0; right: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
@@ -423,6 +426,20 @@ table.table { width: 100%; border-collapse: separate; border-spacing: 0; }
 .org-node.dragging { opacity: .35; }
 .org-node.self { border-color: var(--brand); }
 .org-node.highlight { animation: glow 1.6s ease-out 2; }
+.org-node.section { background: color-mix(in srgb, var(--panel-2) 60%, var(--panel)); border-style: dashed; }
+.org-node .kind-tag { margin-left: auto; font-size: 10.5px; font-weight: 700; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 0 7px; }
+.org-stage.dragging-section .org-node.section, .org-stage.dragging-dept .org-node.section { opacity: .4 !important; }
+.strength { display: inline-flex; align-items: center; gap: 5px; font-weight: 650; color: var(--text-2); }
+.strength .note { font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 0 6px; }
+.strength.under .note { color: var(--warn); background: var(--warn-soft); }
+.strength.over .note { color: var(--bad); background: var(--bad-soft); }
+.strength.full .note { color: var(--ok); background: var(--ok-soft); }
+.avatar.xs { width: 22px; height: 22px; font-size: 9.5px; flex: none; }
+.avatar.sec { background: var(--panel) !important; border: 1.5px dashed; border-radius: 8px; }
+.tray-group { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 10px 8px 4px; }
+.tray-group:first-child { padding-top: 2px; }
+.choice { text-align: left; width: 100%; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 12px; cursor: pointer; color: var(--text); font: inherit; }
+.choice:hover { border-color: var(--brand); background: var(--brand-soft); }
 @keyframes glow { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 60%, transparent); } 100% { box-shadow: 0 0 0 16px transparent; } }
 .org-ghost { position: fixed; pointer-events: none; z-index: 300; width: 220px; opacity: .92; transform: rotate(-2deg); box-shadow: var(--shadow-lg); }
 .org-controls { position: absolute; right: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 6px; z-index: 5; }
@@ -541,7 +558,7 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
   .shell.nav-open::after { content: ''; position: fixed; inset: 0; background: rgba(15, 23, 42, .4); z-index: 25; }
   .topbar { padding: 0 12px; }
   .topbar .menu-btn { display: grid; }
-  .search { width: auto; flex: 1; }
+  .search:not(.search-pop) { width: auto; flex: 1; }
   .content { padding: 16px 16px 90px; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .auth { grid-template-columns: 1fr; }

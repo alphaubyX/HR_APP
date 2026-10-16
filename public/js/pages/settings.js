@@ -13,7 +13,7 @@ const SECTIONS = [
   { id: 'general', label: 'General rules', icon: 'sliders', perm: 'org.manage' },
   { grp: 'Structure' },
   { id: 'branches', label: 'Branches & geofences', icon: 'pin', perm: 'org.manage' },
-  { id: 'departments', label: 'Departments', icon: 'org', perm: 'org.manage' },
+  { id: 'departments', label: 'Departments & sections', icon: 'org', perm: 'org.manage' },
   { id: 'designations', label: 'Designations & grades', icon: 'briefcase', perm: 'org.manage' },
   { grp: 'Time' },
   { id: 'shifts', label: 'Shifts', icon: 'clock', perm: 'org.manage' },
@@ -63,7 +63,7 @@ function listSection(body, { title, rows, columns, fields, endpoint, values = {}
         try { await api.del(`${endpoint}/${row.id}`); toast('Deleted'); if (onSaved) onSaved(); else navigate(location.hash.slice(1)); } catch (err) { errorToast(err); return false; }
       } } : null,
     });
-    if (ok === true) { toast('Saved'); await loadLookups(true); if (onSaved) onSaved(); else window.dispatchEvent(new HashChangeEvent('hashchange')); }
+    if (ok && ok !== 'deleted') { toast('Saved'); await loadLookups(true); if (onSaved) onSaved(); else window.dispatchEvent(new HashChangeEvent('hashchange')); }
   };
   body.append(card(title, h('div', null, intro ? h('div', { style: { padding: '14px 18px 0' } }, intro) : null,
     rows.length ? table({ rows, columns, onRow: canEdit ? (r) => save(r) : null, pageSize: 100 }) : empty(`No ${title.toLowerCase()} yet`, emptyText, canEdit ? h('button', { class: 'btn primary', onclick: () => save() }, icon('plus', 16), 'Add') : null, 'plus')),
@@ -223,11 +223,12 @@ async function departments(body, ctx) {
   const count = (id) => S.lookups.employees.filter((e) => e.department_id === id && e.status !== 'exited').length;
   listSection(body, {
     title: 'Departments', rows, endpoint: '/api/departments', onSaved: ctx.reload,
-    intro: h('p', { class: 'muted small' }, 'Tip: you can also arrange departments and their heads by dragging on the ', h('a', { href: '#/organogram?mode=departments' }, 'Organogram'), '.'),
+    intro: h('p', { class: 'muted small' }, 'Tip: you can also add and arrange departments, sections and their heads by dragging on the ', h('a', { href: '#/organogram?mode=departments' }, 'Organogram'), '.'),
     fields: [
       { name: 'name', label: 'Name', required: true }, { name: 'code', label: 'Code' },
       { name: 'parent_id', label: 'Part of', type: 'select', placeholder: '— Top level —', options: () => options('departments', { active: false }), numeric: true },
       { name: 'head_employee_id', label: 'Head of department', type: 'select', placeholder: '—', options: () => employeeOptions(), numeric: true },
+      { name: 'approved_strength', label: 'Approved strength', type: 'number', min: 0, placeholder: 'Not set', help: 'Sanctioned headcount.' },
       { name: 'color', label: 'Colour', type: 'color' }, { name: 'sort', label: 'Order', type: 'number' },
       { name: 'active', label: 'Active', type: 'checkbox', default: true },
     ],
@@ -236,10 +237,40 @@ async function departments(body, ctx) {
       { key: 'name', label: 'Department', render: (d) => h('span', { class: 'row' }, h('span', { class: 'swatch', style: { background: d.color || 'var(--faint)' } }), h('strong', null, d.name), d.code ? h('span', { class: 'tiny muted' }, d.code) : null) },
       { key: 'parent', label: 'Part of', render: (d) => lookupName('departments', d.parent_id) },
       { key: 'head', label: 'Head', render: (d) => lookupName('employees', d.head_employee_id) },
-      { key: 'n', label: 'People', num: true, render: (d) => count(d.id) },
+      { key: 'n', label: 'People', num: true, render: (d) => strengthText(count(d.id), d.approved_strength) },
       { key: 'active', label: '', render: activeBadge },
     ],
   });
+  const sections = await api.get('/api/sections');
+  const secCount = (id) => S.lookups.employees.filter((e) => e.section_id === id && e.status !== 'exited').length;
+  body.append(h('div', { class: 'mt-16' }));
+  listSection(body, {
+    title: 'Sections', rows: sections, endpoint: '/api/sections', onSaved: ctx.reload,
+    intro: h('p', { class: 'muted small' }, 'Sections are teams inside a department, e.g. Accounts inside Finance. You can also add them on the ', h('a', { href: '#/organogram?mode=departments' }, 'Organogram'), '.'),
+    fields: [
+      { name: 'department_id', label: 'Department', type: 'select', required: true, placeholder: '— Choose —', options: () => options('departments', { active: false }), numeric: true },
+      { name: 'name', label: 'Section name', required: true }, { name: 'code', label: 'Code' },
+      { name: 'head_employee_id', label: 'Head of section', type: 'select', placeholder: '—', options: () => employeeOptions(), numeric: true },
+      { name: 'approved_strength', label: 'Approved strength', type: 'number', min: 0, placeholder: 'Not set', help: 'Sanctioned headcount.' },
+      { name: 'sort', label: 'Order', type: 'number' },
+      { name: 'active', label: 'Active', type: 'checkbox', default: true },
+    ],
+    values: { active: true, sort: 0 },
+    columns: [
+      { key: 'name', label: 'Section', render: (x) => h('span', { class: 'row' }, h('strong', null, x.name), x.code ? h('span', { class: 'tiny muted' }, x.code) : null) },
+      { key: 'dept', label: 'Department', render: (x) => lookupName('departments', x.department_id) },
+      { key: 'head', label: 'Head', render: (x) => lookupName('employees', x.head_employee_id) },
+      { key: 'n', label: 'People', num: true, render: (x) => strengthText(secCount(x.id), x.approved_strength) },
+      { key: 'active', label: '', render: activeBadge },
+    ],
+  });
+}
+
+/** "5 / 8" when an approved strength is set, otherwise just the head count. */
+function strengthText(count, approved) {
+  if (approved === null || approved === undefined) return String(count);
+  const kind = count > approved ? 'bad' : count < approved ? 'warn' : 'ok';
+  return h('span', { title: `${count} working · ${approved} approved` }, `${count} / ${approved} `, badge(count > approved ? `${count - approved} over` : count < approved ? `${approved - count} vacant` : 'full', kind));
 }
 
 /* ------------------------------------------------------------------ designations & grades */
@@ -301,7 +332,7 @@ async function shifts(body, ctx) {
       onSubmit: (v) => { const body2 = { ...v, day_overrides: overrides }; return s ? api.put(`/api/shifts/${s.id}`, body2) : api.post('/api/shifts', body2); },
       danger: s ? { label: 'Delete', onClick: async () => { if (!(await confirmDialog(`Delete ${s.name}?`, { danger: true, ok: 'Delete' }))) return false; try { await api.del(`/api/shifts/${s.id}`); toast('Deleted'); ctx.reload(); } catch (err) { errorToast(err); return false; } } } : null,
     });
-    if (ok === true) { toast('Saved'); await loadLookups(true); ctx.reload(); }
+    if (ok && ok !== 'deleted') { toast('Saved'); await loadLookups(true); ctx.reload(); }
   };
   body.append(card('Shifts', table({
     rows, onRow: (s) => edit(s),
@@ -485,7 +516,7 @@ async function structures(body, ctx) {
       onSubmit: (v) => (s ? api.put(`/api/salary-structures/${s.id}`, { ...v, lines }) : api.post('/api/salary-structures', { ...v, lines })),
       danger: s ? { label: 'Delete', onClick: async () => { await api.del(`/api/salary-structures/${s.id}`); toast('Deleted'); ctx.reload(); } } : null,
     });
-    if (ok === true) { toast('Saved'); await loadLookups(true); ctx.reload(); }
+    if (ok && ok !== 'deleted') { toast('Saved'); await loadLookups(true); ctx.reload(); }
   };
   body.append(card('Salary structures', h('div', null,
     h('div', { style: { padding: '14px 18px 0' } }, alertBox('A structure is a ready-made split of the gross salary (e.g. “Standard”: basic = gross ÷ 1.55, house rent 45% of basic, utilities 10% of basic). Pick it when setting someone’s salary, then adjust if needed.', 'info', 'layers')),
@@ -568,7 +599,7 @@ async function users(body, ctx) {
       onSubmit: (v) => { if (!v.password) delete v.password; return api.put(`/api/users/${u.id}`, v); },
       danger: { label: 'Remove access', onClick: async () => { if (!(await confirmDialog(`Remove ${u.name}'s access to this organization?`, { danger: true, ok: 'Remove' }))) return false; try { await api.del(`/api/users/${u.id}`); toast('Removed'); ctx.reload(); } catch (err) { errorToast(err); return false; } } },
     });
-    if (ok === true) { toast('Saved'); ctx.reload(); }
+    if (ok && ok !== 'deleted') { toast('Saved'); ctx.reload(); }
   };
   body.append(card('Users & roles', h('div', null,
     h('div', { style: { padding: '14px 18px 0' } }, alertBox(h('div', null, Object.values(roles).map((r) => h('div', null, h('strong', null, r.label), ': ', r.perms.length ? r.perms.map((p) => p.replace('.', ' ')).join(', ') : 'their own attendance, leave and payslips')),

@@ -42,7 +42,7 @@ module.exports = function orgRoutes(r, { db }) {
     const q = (sql) => db.all(sql, [id]);
     const scope = await employeeScope(req);
     let employees = await db.all(
-      `SELECT id, emp_code, first_name, last_name, department_id, designation_id, branch_id, manager_id, status, gender, photo IS NOT NULL AS has_photo
+      `SELECT id, emp_code, first_name, last_name, department_id, section_id, designation_id, branch_id, manager_id, status, gender, photo IS NOT NULL AS has_photo
        FROM employees WHERE org_id = ? ORDER BY first_name, last_name`, [id]);
     if (!scope.all) {
       // managers of the people you can see are named too (e.g. "your line manager")
@@ -52,7 +52,8 @@ module.exports = function orgRoutes(r, { db }) {
     }
     res.json({
       branches: await q('SELECT id, name, code, lat, lng, radius_m, active FROM branches WHERE org_id = ? ORDER BY name'),
-      departments: await q('SELECT id, name, code, parent_id, head_employee_id, color, active FROM departments WHERE org_id = ? ORDER BY sort, name'),
+      departments: await q('SELECT id, name, code, parent_id, head_employee_id, color, approved_strength, active FROM departments WHERE org_id = ? ORDER BY sort, name'),
+      sections: await q('SELECT id, department_id, name, code, head_employee_id, approved_strength, active FROM sections WHERE org_id = ? ORDER BY sort, name'),
       designations: await q('SELECT id, name, grade_id, active FROM designations WHERE org_id = ? ORDER BY sort, name'),
       grades: await q('SELECT id, name, min_salary, max_salary, structure_id, active FROM grades WHERE org_id = ? ORDER BY sort, name'),
       shifts: await q('SELECT id, name, start_time, end_time, break_minutes, weekly_off, day_overrides, is_default, active FROM shifts WHERE org_id = ? ORDER BY name'),
@@ -67,6 +68,9 @@ module.exports = function orgRoutes(r, { db }) {
   /* ---------------------------------------------------------------- reference data */
   const used = async (sql, params, message) => {
     if (Number(await db.value(sql, params))) throw bad(message);
+  };
+  const own = async (req, table, id, what) => {
+    if (!(await db.get(`SELECT id FROM ${table} WHERE id = ? AND org_id = ?`, [id, req.org.id]))) throw bad(`${what} not found.`);
   };
 
   crud(r, db, {
@@ -83,9 +87,11 @@ module.exports = function orgRoutes(r, { db }) {
     path: 'departments', table: 'departments', perm: 'org.manage', viewPerm: 'member', order: 'sort, name', label: 'Department', hasCreatedAt: true,
     spec: {
       name: ['str', { required: true, max: 120 }], code: ['str', { max: 30 }], parent_id: ['id'], head_employee_id: ['id'],
-      color: ['str', { max: 20 }], sort: ['int', { min: 0, max: 100000, default: 0 }], active: ['bool'],
+      color: ['str', { max: 20 }], approved_strength: ['int', { min: 0, max: 100000 }],
+      sort: ['int', { min: 0, max: 100000, default: 0 }], active: ['bool'],
     },
     async beforeSave(req, data, existing) {
+      if (data.head_employee_id) await own(req, 'employees', data.head_employee_id, 'Head of department');
       if (data.parent_id) {
         if (existing && data.parent_id === existing.id) throw bad('A department cannot be inside itself.');
         // walk up from the new parent: we must not meet this department
@@ -103,7 +109,29 @@ module.exports = function orgRoutes(r, { db }) {
     async beforeDelete(req, row) {
       await used('SELECT COUNT(*) FROM employees WHERE org_id = ? AND department_id = ?', [req.org.id, row.id], 'This department still has people. Move them first.');
       await used('SELECT COUNT(*) FROM departments WHERE org_id = ? AND parent_id = ?', [req.org.id, row.id], 'This department has sub-departments. Move or delete them first.');
+      await used('SELECT COUNT(*) FROM sections WHERE org_id = ? AND department_id = ?', [req.org.id, row.id], 'This department has sections. Move or delete them first.');
     },
+  });
+
+  crud(r, db, {
+    path: 'sections', table: 'sections', perm: 'org.manage', viewPerm: 'member', order: 'sort, name', label: 'Section', hasCreatedAt: true,
+    spec: {
+      department_id: ['id', { required: true }], name: ['str', { required: true, max: 120 }], code: ['str', { max: 30 }],
+      head_employee_id: ['id'], approved_strength: ['int', { min: 0, max: 100000 }],
+      sort: ['int', { min: 0, max: 100000, default: 0 }], active: ['bool'],
+    },
+    async beforeSave(req, data) {
+      if (data.department_id === null) throw bad('Department is required.');
+      if (data.department_id) await own(req, 'departments', data.department_id, 'Department');
+      if (data.head_employee_id) await own(req, 'employees', data.head_employee_id, 'Head of section');
+    },
+    // people in a section that moves to another department move with it
+    async afterSave(req, id, data, existing) {
+      if (existing && data.department_id && data.department_id !== existing.department_id) {
+        await db.run('UPDATE employees SET department_id = ? WHERE org_id = ? AND section_id = ?', [data.department_id, req.org.id, id]);
+      }
+    },
+    beforeDelete: (req, row) => used('SELECT COUNT(*) FROM employees WHERE org_id = ? AND section_id = ?', [req.org.id, row.id], 'This section still has people. Move them first.'),
   });
 
   crud(r, db, {

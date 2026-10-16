@@ -1,10 +1,11 @@
-// Organogram: a drag-and-drop chart of who reports to whom, and of departments.
+// Organogram: a drag-and-drop chart of who reports to whom, and of departments and their sections.
 // Drag a person (from the list on the left, or a card on the chart) onto someone to make them their
-// line manager. Drag the background to move around, scroll or use the buttons to zoom.
+// line manager. On the departments chart, drag departments and sections to rearrange them, and
+// people into them. Drag the background to move around, scroll or use the buttons to zoom.
 import { api } from '../api.js';
 import { S, can, loadLookups, navigate } from '../state.js';
 import {
-  h, clear, icon, pageHead, avatar, seg, modal, toast, errorToast, colorFor, initials, buildForm,
+  h, clear, icon, pageHead, avatar, seg, modal, toast, errorToast, colorFor, initials, buildForm, formModal, confirmDialog,
 } from '../ui.js';
 
 const W = 220; // card width
@@ -16,6 +17,7 @@ const INDENT = 34;
 
 export default async function organogram(view, params, query) {
   const editable = can('employees.edit');
+  const manage = can('org.manage'); // create, edit and delete departments and sections
   let mode = query.mode === 'departments' ? 'departments' : 'people';
   let data = await api.get('/api/organogram');
   const collapsed = new Set();
@@ -41,18 +43,26 @@ export default async function organogram(view, params, query) {
   const trayList = h('div', { class: 'org-tray-list' });
   const traySearch = h('input', { class: 'input sm', placeholder: 'Find a person…', oninput: (e) => { search = e.target.value.trim().toLowerCase(); drawTray(); draw(); } });
   traySearch.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const p = matches()[0]; if (p) centerOn(p.id, true); } });
+  const trayTitle = h('div', { class: 'strong grow' });
+  const trayTools = h('div', { class: 'row', style: { gap: '6px' } });
+  const trayTabs = h('div');
+  let trayTab = 'units'; // departments chart: 'units' (departments & sections) or 'people'
+  const trayTip = h('div', { class: 'tiny muted' });
   const tray = h('aside', { class: 'org-tray' },
-    h('div', { class: 'org-tray-head' }, h('div', { class: 'strong' }, 'People'), traySearch,
-      h('div', { class: 'tiny muted' }, editable ? 'Drag a name onto a card to set their line manager.' : 'Click a name to find it on the chart.')),
+    h('div', { class: 'org-tray-head' }, h('div', { class: 'row' }, trayTitle), trayTabs, trayTools, traySearch, trayTip),
     trayList);
   const page = h('div', { class: ['org-page', !editable && 'no-side'] }, editable ? tray : null, canvas);
 
   const deptSel = h('select', { class: 'input sm', style: { width: '200px' }, onchange: (e) => { deptFilter = e.target.value; draw(); } },
     h('option', { value: '' }, 'All departments'), data.departments.map((d) => h('option', { value: d.id }, d.name)));
   view.append(pageHead('Organogram', {
-    sub: mode === 'people' ? 'Who reports to whom. Your changes save straight away.' : 'How departments sit inside each other, and who heads them.',
+    sub: subText(),
     actions: [
-      seg([['people', 'Reporting lines'], ['departments', 'Departments']], mode, (m) => { mode = m; collapsed.clear(); hideDetail(); drawTray(); draw(); setTimeout(fit, 0); }),
+      seg([['people', 'Reporting lines'], ['departments', 'Departments']], mode, (m) => {
+        mode = m; collapsed.clear(); hideDetail(); drawTray(); draw(); setTimeout(fit, 0);
+        const sub = view.querySelector('.page-head .sub, .page-head p');
+        if (sub) sub.textContent = subText();
+      }),
       deptSel,
       h('button', { class: 'btn', onclick: () => { collapsed.clear(); draw(); } }, 'Expand all'),
       h('button', { class: 'btn', onclick: () => window.print() }, icon('printer', 16), 'Print'),
@@ -60,7 +70,16 @@ export default async function organogram(view, params, query) {
   }));
   view.append(page);
 
+  function subText() {
+    return mode === 'people' ? 'Who reports to whom. Your changes save straight away.'
+      : 'Departments, their sections and approved strength. Your changes save straight away.';
+  }
+
   /* ---------------------------------------------------------------- data → trees */
+  // On the departments chart, keys are 'd<id>' for a department and 's<id>' for a section.
+  const deptKey = (id) => `d${id}`;
+  const secKey = (id) => `s${id}`;
+  const keyOf = (raw) => (mode === 'people' ? Number(raw) : String(raw));
   const people = () => data.people;
   const byId = () => new Map(data.people.map((p) => [p.id, p]));
 
@@ -68,10 +87,18 @@ export default async function organogram(view, params, query) {
     if (mode === 'people') {
       return data.people.map((p) => ({ id: p.id, parent: p.manager_id, p }));
     }
-    const counts = new Map();
-    data.people.forEach((p) => counts.set(p.department_id, (counts.get(p.department_id) || 0) + 1));
-    return data.departments.map((d) => ({ id: d.id, parent: d.parent_id, d: { ...d, count: counts.get(d.id) || 0 } }));
+    const inDept = new Map();
+    const inSec = new Map();
+    data.people.forEach((p) => {
+      inDept.set(p.department_id, (inDept.get(p.department_id) || 0) + 1);
+      if (p.section_id) inSec.set(p.section_id, (inSec.get(p.section_id) || 0) + 1);
+    });
+    return [
+      ...data.departments.map((d) => ({ id: deptKey(d.id), parent: d.parent_id ? deptKey(d.parent_id) : null, d: { ...d, count: inDept.get(d.id) || 0 } })),
+      ...data.sections.map((x) => ({ id: secKey(x.id), parent: deptKey(x.department_id), s: { ...x, count: inSec.get(x.id) || 0 } })),
+    ];
   }
+  const nodeName = (n) => (n.p ? n.p.name : n.d ? n.d.name : n.s.name);
 
   function buildTrees() {
     const list = items();
@@ -82,8 +109,10 @@ export default async function organogram(view, params, query) {
       if (n.parent && ids.has(n.parent) && n.parent !== n.id) nodes.get(n.parent).children.push(n);
       else roots.push(n);
     }
-    const name = (n) => (n.p ? n.p.name : n.d.name);
-    const sortRec = (n) => { n.children.sort((a, b) => b.children.length - a.children.length || name(a).localeCompare(name(b))); n.children.forEach(sortRec); };
+    const name = nodeName;
+    // sections first, then sub-departments; bigger teams before smaller ones
+    const rank = (n) => (n.s ? 0 : 1);
+    const sortRec = (n) => { n.children.sort((a, b) => rank(a) - rank(b) || b.children.length - a.children.length || name(a).localeCompare(name(b))); n.children.forEach(sortRec); };
     roots.sort((a, b) => countAll(b) - countAll(a) || name(a).localeCompare(name(b)));
     roots.forEach(sortRec);
     return { roots, nodes };
@@ -150,13 +179,13 @@ export default async function organogram(view, params, query) {
           paths.push(`M${px},${n.y + H} V${my} H${cx} V${k.y}`);
         }
       }
-      stage.append(mode === 'people' ? personCard(n, hits) : deptCard(n));
+      stage.append(mode === 'people' ? personCard(n, hits) : n.s ? sectionCard(n) : deptCard(n));
     }
     svg.innerHTML = paths.map((d) => `<path d="${d}"/>`).join('');
     if (!positions.size) {
       stage.append(h('div', { class: 'org-node', style: { left: '0px', top: '0px', width: '320px', height: 'auto' } },
         h('div', { class: 'strong' }, mode === 'people' ? 'No one on the chart yet' : 'No departments yet'),
-        h('div', { class: 'small muted' }, mode === 'people' ? 'Add employees first.' : 'Add departments under Settings.')));
+        h('div', { class: 'small muted' }, mode === 'people' ? 'Add employees first.' : manage ? 'Use “Department” on the left to add your first one.' : 'Ask HR to add departments.')));
     }
     applyTransform();
   }
@@ -186,39 +215,121 @@ export default async function organogram(view, params, query) {
     return el;
   }
 
+  const deptColor = (d) => (d && (d.color || colorFor(d.name))) || 'var(--faint)';
+  const deptOf = (id) => data.departments.find((x) => x.id === id);
+
+  /** "5 / 8" against the approved strength, coloured when short or over. */
+  function strength(count, approved) {
+    if (approved === null || approved === undefined) {
+      return h('span', { title: 'No approved strength set' }, `${count} ${count === 1 ? 'person' : 'people'}`);
+    }
+    const kind = count > approved ? 'over' : count < approved ? 'under' : 'full';
+    const note = kind === 'over' ? `${count - approved} over` : kind === 'under' ? `${approved - count} vacant` : 'full';
+    return h('span', { class: ['strength', kind], title: `${count} working · ${approved} approved` }, `${count} / ${approved}`, h('span', { class: 'note' }, note));
+  }
+
+  function toggleBtn(n) {
+    if (!n.children.length) return null;
+    return h('button', {
+      class: 'toggle', type: 'button', onpointerdown: (e) => e.stopPropagation(),
+      onclick: (e) => { e.stopPropagation(); if (collapsed.has(n.id)) collapsed.delete(n.id); else collapsed.add(n.id); draw(); },
+    }, collapsed.has(n.id) ? icon('down', 11) : icon('up', 11), String(countAll(n)));
+  }
+
   function deptCard(n) {
     const d = n.d;
     const head = d.head_employee_id ? byId().get(d.head_employee_id) : null;
     const dim = deptFilter && String(d.id) !== deptFilter;
-    const el = h('div', { class: 'org-node', style: { left: `${n.x}px`, top: `${n.y}px`, height: `${H}px`, opacity: dim ? '.32' : '1' }, dataset: { id: d.id } },
-      h('div', { class: 'bar', style: { background: d.color || colorFor(d.name) } }),
+    const el = h('div', { class: 'org-node', style: { left: `${n.x}px`, top: `${n.y}px`, height: `${H}px`, opacity: dim ? '.32' : '1' }, dataset: { id: n.id } },
+      h('div', { class: 'bar', style: { background: deptColor(d) } }),
       h('div', { class: 'row', style: { gap: '10px' } },
-        h('span', { class: 'avatar sm', style: { background: d.color || colorFor(d.name), borderRadius: '8px' } }, initials(d.name)),
+        h('span', { class: 'avatar sm', style: { background: deptColor(d), borderRadius: '8px' } }, initials(d.name)),
         h('div', { class: 'grow', style: { minWidth: 0 } }, h('div', { class: 'nm' }, d.name), h('div', { class: 'ds' }, head ? `Head: ${head.name}` : 'No head yet'))),
-      h('div', { class: 'ft' }, icon('users', 12), `${d.count} ${d.count === 1 ? 'person' : 'people'}`,
-        n.children.length ? h('button', {
-          class: 'toggle', type: 'button', onpointerdown: (e) => e.stopPropagation(),
-          onclick: (e) => { e.stopPropagation(); if (collapsed.has(d.id)) collapsed.delete(d.id); else collapsed.add(d.id); draw(); },
-        }, collapsed.has(d.id) ? icon('down', 11) : icon('up', 11), String(countAll(n))) : null));
-    el.addEventListener('pointerdown', (e) => startPointer(e, { kind: 'dept', id: d.id, el }));
+      h('div', { class: 'ft' }, icon('users', 12), strength(d.count, d.approved_strength), toggleBtn(n)));
+    el.addEventListener('pointerdown', (e) => startPointer(e, { kind: 'dept', id: n.id, el }));
+    return el;
+  }
+
+  function sectionCard(n) {
+    const x = n.s;
+    const d = deptOf(x.department_id);
+    const head = x.head_employee_id ? byId().get(x.head_employee_id) : null;
+    const dim = deptFilter && String(x.department_id) !== deptFilter;
+    const el = h('div', { class: 'org-node section', style: { left: `${n.x}px`, top: `${n.y}px`, height: `${H}px`, opacity: dim ? '.32' : '1' }, dataset: { id: n.id } },
+      h('div', { class: 'bar', style: { background: deptColor(d) } }),
+      h('div', { class: 'row', style: { gap: '10px' } },
+        h('span', { class: 'avatar sm sec', style: { color: deptColor(d), borderColor: deptColor(d) } }, initials(x.name)),
+        h('div', { class: 'grow', style: { minWidth: 0 } }, h('div', { class: 'nm' }, x.name), h('div', { class: 'ds' }, head ? `Head: ${head.name}` : `Section of ${d ? d.name : '—'}`))),
+      h('div', { class: 'ft' }, icon('users', 12), strength(x.count, x.approved_strength), h('span', { class: 'kind-tag' }, 'Section')));
+    el.addEventListener('pointerdown', (e) => startPointer(e, { kind: 'section', id: n.id, el }));
     return el;
   }
 
   function drawTray() {
     if (!editable) return;
+    const depts = mode === 'departments';
+    trayTitle.textContent = depts ? 'Departments' : 'People';
+    traySearch.placeholder = depts && trayTab === 'units' ? 'Find a department or section…' : 'Find a person…';
+    trayTip.textContent = !depts ? 'Drag a name onto a card to set their line manager.'
+      : trayTab === 'units' ? 'Drag a department onto another to put it inside, or a section onto a department to move it.'
+        : 'Drag a person into a department or section, or onto it to make them its head.';
+    hint.textContent = !editable ? 'Drag the background to move · scroll to zoom'
+      : depts ? 'Drag departments, sections and people · drag the background to move · scroll to zoom'
+        : 'Drag a person onto their new manager · drag the background to move · scroll to zoom';
+    clear(trayTabs, depts ? seg([['units', 'Departments'], ['people', 'People']], trayTab, (t) => { trayTab = t; drawTray(); }) : null);
+    trayTabs.classList.toggle('hidden', !depts);
+    clear(trayTools, depts && manage && trayTab === 'units' ? [
+      h('button', { class: 'btn sm grow', onclick: () => editDepartment(null) }, icon('plus', 14), 'Department'),
+      h('button', { class: 'btn sm grow', onclick: () => editSection(null), disabled: !data.departments.length, title: data.departments.length ? '' : 'Add a department first' }, icon('plus', 14), 'Section'),
+    ] : []);
+    trayTools.classList.toggle('hidden', !(depts && manage && trayTab === 'units'));
+
     const placed = new Set(people().filter((p) => p.manager_id).map((p) => p.id));
-    let list = people();
-    if (search) list = matches();
-    if (mode === 'departments') list = list.slice();
-    clear(trayList, list.length ? list.map((p) => {
-      const el = h('div', { class: 'tray-item', title: 'Drag onto their new manager · double-click to find on the chart' },
+    const list = search ? matches() : people();
+    const personItem = (p) => {
+      const where = depts ? [p.department, sectionName(p.section_id)].filter(Boolean).join(' › ') || 'No department' : p.designation || p.emp_code;
+      const el = h('div', { class: 'tray-item', title: depts ? 'Drag into a department or section' : 'Drag onto their new manager · double-click to find on the chart' },
         icon('grip', 14, 'style="opacity:.4"'), avatar(p.name, { size: 'sm', photo: p.photo }),
-        h('div', { class: 'grow', style: { minWidth: 0 } }, h('div', { class: 'small strong ellipsis' }, p.name), h('div', { class: 'tiny muted ellipsis' }, p.designation || p.emp_code)),
-        placed.has(p.id) ? null : h('span', { class: 'top-tag', title: 'No line manager: at the top of the chart' }, 'Top'));
+        h('div', { class: 'grow', style: { minWidth: 0 } }, h('div', { class: 'small strong ellipsis' }, p.name), h('div', { class: 'tiny muted ellipsis' }, where)),
+        depts || placed.has(p.id) ? null : h('span', { class: 'top-tag', title: 'No line manager: at the top of the chart' }, 'Top'));
       el.addEventListener('pointerdown', (e) => startPointer(e, { kind: 'person', id: p.id, el, fromTray: true }));
       el.addEventListener('dblclick', () => centerOn(p.id, true));
       return el;
-    }) : h('div', { class: 'small muted', style: { padding: '8px' } }, 'No one found.'));
+    };
+    if (!depts) {
+      clear(trayList, list.length ? list.map(personItem) : h('div', { class: 'small muted', style: { padding: '8px' } }, 'No one found.'));
+      return;
+    }
+    if (trayTab === 'units') clear(trayList, deptTrayItems());
+    else clear(trayList, list.length ? list.map(personItem) : h('div', { class: 'small muted', style: { padding: '8px' } }, 'No one found.'));
+  }
+
+  const plural = (n, word) => (n ? `${n} ${word}${n === 1 ? '' : 's'}` : `No ${word}s`);
+  const sectionName = (id) => { const x = id && data.sections.find((s) => s.id === id); return x ? x.name : ''; };
+
+  /** The department tree as a list (sections indented under their department). */
+  function deptTrayItems() {
+    const { roots } = buildTrees();
+    const out = [];
+    const hit = (n) => !search || nodeName(n).toLowerCase().includes(search);
+    const anyHit = (n) => hit(n) || n.children.some(anyHit);
+    const walk = (n, depth) => {
+      if (!anyHit(n)) return;
+      const isSec = !!n.s;
+      const x = isSec ? n.s : n.d;
+      const color = deptColor(isSec ? deptOf(x.department_id) : x);
+      const el = h('div', { class: ['tray-item', isSec && 'sec'], style: { paddingLeft: `${8 + depth * 16}px` }, title: isSec ? 'Drag onto a department to move this section' : 'Drag onto a department to put it inside' },
+        icon('grip', 14, 'style="opacity:.4"'),
+        isSec ? h('span', { class: 'avatar xs sec', style: { color, borderColor: color } }, initials(x.name)) : h('span', { class: 'avatar xs', style: { background: color, borderRadius: '6px' } }, initials(x.name)),
+        h('div', { class: 'grow', style: { minWidth: 0 } }, h('div', { class: ['small ellipsis', !isSec && 'strong'] }, x.name),
+          h('div', { class: 'tiny muted' }, isSec ? 'Section' : plural(n.children.filter((c) => c.s).length, 'section'))),
+        h('span', { class: 'tiny muted', style: { whiteSpace: 'nowrap' } }, x.approved_strength !== null && x.approved_strength !== undefined ? `${x.count}/${x.approved_strength}` : String(x.count)));
+      el.addEventListener('pointerdown', (e) => startPointer(e, { kind: isSec ? 'section' : 'dept', id: n.id, el, fromTray: true }));
+      out.push(el);
+      n.children.forEach((c) => walk(c, depth + 1));
+    };
+    roots.forEach((r) => walk(r, 0));
+    return out.length ? out : h('div', { class: 'small muted', style: { padding: '8px' } }, search ? 'No department found.' : 'No departments yet.');
   }
 
   /* ---------------------------------------------------------------- pan & zoom */
@@ -256,6 +367,15 @@ export default async function organogram(view, params, query) {
     if (mode === 'people') {
       let cur = byId().get(id);
       while (cur && cur.manager_id) { collapsed.delete(cur.manager_id); cur = byId().get(cur.manager_id); }
+      draw();
+    } else {
+      if (typeof id === 'number') { // a person: show their section or department
+        const p = byId().get(id);
+        if (!p || !p.department_id) return;
+        id = p.section_id ? secKey(p.section_id) : deptKey(p.department_id);
+      }
+      const parents = new Map(items().map((x) => [x.id, x.parent]));
+      for (let cur = parents.get(id); cur; cur = parents.get(cur)) collapsed.delete(cur);
       draw();
     }
     const n = positions.get(id);
@@ -322,7 +442,7 @@ export default async function organogram(view, params, query) {
     let target = null;
     let longPress = null;
     const draggable = editable && (src.kind === 'person' || mode === 'departments');
-    const forbidden = src.kind === 'person' && mode === 'people' ? descendantsOf(src.id) : src.kind === 'dept' ? descendantsOf(src.id) : new Set();
+    const forbidden = (src.kind === 'person' && mode === 'people') || src.kind === 'dept' ? descendantsOf(src.id) : new Set();
 
     const begin = () => {
       dragging = true;
@@ -335,20 +455,23 @@ export default async function organogram(view, params, query) {
       src.el.classList.add('dragging');
       if (src.kind === 'person' && mode === 'people') rootDrop.classList.add('show');
       if (src.kind === 'dept') { rootDrop.classList.add('show'); rootDrop.lastChild.textContent = 'Drop here to make it a top-level department'; }
+      if (mode === 'departments') stage.classList.add(`dragging-${src.kind}`);
       moveGhost(e.clientX, e.clientY);
     };
     const moveGhost = (x, y) => { ghost.style.transform = `translate(${x + 12}px, ${y + 8}px) rotate(-2deg)`; };
     const findTarget = (x, y) => {
       const under = document.elementFromPoint(x, y);
       if (!under) return null;
-      if (under.closest('.org-root-drop')) return 'root';
+      if (under.closest('.org-root-drop')) return rootDrop.classList.contains('show') ? 'root' : null;
       const node = under.closest('.org-node');
-      if (!node || !stage.contains(node)) return null;
-      const id = Number(node.dataset.id);
+      if (!node || !stage.contains(node) || !node.dataset.id) return null;
+      const id = keyOf(node.dataset.id);
       if (mode === 'people') {
         if (src.kind !== 'person' || id === src.id || forbidden.has(id)) return null;
       } else if (src.kind === 'dept') {
-        if (id === src.id || forbidden.has(id)) return null;
+        if (id === src.id || forbidden.has(id) || !String(id).startsWith('d')) return null;
+      } else if (src.kind === 'section') {
+        if (!String(id).startsWith('d')) return null; // sections go into departments
       }
       return { id, node };
     };
@@ -401,6 +524,7 @@ export default async function organogram(view, params, query) {
       src.el.classList.remove('dragging');
       stage.querySelectorAll('.drop-target').forEach((n) => n.classList.remove('drop-target'));
       rootDrop.classList.remove('show', 'over');
+      stage.classList.remove('dragging-dept', 'dragging-section', 'dragging-person');
       rootDrop.lastChild.textContent = 'Drop here to put at the top (no manager)';
     };
     const cancel = () => { clearTimeout(longPress); cleanup(); };
@@ -442,19 +566,121 @@ export default async function organogram(view, params, query) {
       return;
     }
     // departments chart
-    const depts = new Map(data.departments.map((d) => [d.id, d]));
-    if (src.kind === 'dept') {
-      const d = depts.get(src.id);
-      const parent = targetId ? depts.get(targetId) : null;
-      if ((d.parent_id || null) === (targetId || null)) return;
-      if (!(await askMove(parent ? `Put ${d.name} inside ${parent.name}?` : `Make ${d.name} a top-level department?`, null))) return;
-      try { await api.put(`/api/organogram/departments/${d.id}`, { parent_id: targetId }); toast('Department moved'); await refresh(); } catch (err) { errorToast(err); }
-    } else if (src.kind === 'person' && targetId) {
-      const p = people.get(src.id);
-      const d = depts.get(targetId);
-      if (!(await askMove(`Make ${p.name} the head of ${d.name}?`, h('p', { class: 'muted small' }, 'This sets the department head. Their own department stays as it is.')))) return;
-      try { await api.put(`/api/organogram/departments/${d.id}`, { head_employee_id: p.id }); toast(`${p.name} heads ${d.name}`); await refresh(); } catch (err) { errorToast(err); }
-    }
+    const idOf = (key) => (key ? Number(String(key).slice(1)) : null);
+    const target = targetId ? (String(targetId).startsWith('s') ? { kind: 'section', x: data.sections.find((s) => s.id === idOf(targetId)) } : { kind: 'dept', x: deptOf(idOf(targetId)) }) : null;
+    try {
+      if (src.kind === 'dept') {
+        const d = deptOf(idOf(src.id));
+        const parent = target ? target.x : null;
+        if ((d.parent_id || null) === (parent ? parent.id : null)) return;
+        if (!(await askMove(parent ? `Put ${d.name} inside ${parent.name}?` : `Make ${d.name} a top-level department?`, null))) return;
+        await api.put(`/api/organogram/departments/${d.id}`, { parent_id: parent ? parent.id : null });
+        toast('Department moved');
+        await refresh();
+        centerOn(src.id, true);
+      } else if (src.kind === 'section' && target) {
+        const x = data.sections.find((s) => s.id === idOf(src.id));
+        const d = target.x;
+        if (x.department_id === d.id) return;
+        const n = data.people.filter((p) => p.section_id === x.id).length;
+        if (!(await askMove(`Move the ${x.name} section to ${d.name}?`, n ? h('p', { class: 'muted small' }, `The ${n} ${n === 1 ? 'person' : 'people'} in this section move to ${d.name} with it.`) : null))) return;
+        await api.put(`/api/organogram/sections/${x.id}`, { department_id: d.id });
+        toast(`${x.name} is now in ${d.name}`);
+        await refresh();
+        centerOn(src.id, true);
+      } else if (src.kind === 'person' && target) {
+        const p = people.get(src.id);
+        const isSec = target.kind === 'section';
+        const x = target.x;
+        const dept = isSec ? deptOf(x.department_id) : x;
+        const where = isSec ? `${dept.name} › ${x.name}` : x.name;
+        const already = isSec ? p.section_id === x.id : p.department_id === x.id && !p.section_id;
+        const choice = await askChoice(`${p.name} → ${x.name}`, [
+          !already && ['move', `Move ${p.name} into ${where}`, `Their department${isSec ? ' and section' : ''} change${isSec ? '' : '; they leave any section'}. Their line manager stays the same.`],
+          ['head', `Make ${p.name} the head of ${x.name}`, `Sets the ${isSec ? 'section' : 'department'} head. Where ${p.name} works stays as it is.`],
+        ].filter(Boolean));
+        if (choice === 'move') {
+          await api.put(`/api/organogram/${p.id}/place`, isSec ? { section_id: x.id } : { department_id: x.id });
+          toast(`${p.name} moved to ${where}`);
+        } else if (choice === 'head') {
+          await api.put(isSec ? `/api/organogram/sections/${x.id}` : `/api/organogram/departments/${x.id}`, { head_employee_id: p.id });
+          toast(`${p.name} heads ${x.name}`);
+        } else return;
+        await refresh();
+      }
+    } catch (err) { errorToast(err); }
+  }
+
+  /** A dialog with one button per option: [[value, label, explanation]]. Resolves to the value or null. */
+  function askChoice(title, choices) {
+    return new Promise((resolve) => {
+      let done = false;
+      const pickIt = (v) => { done = true; m.close(); resolve(v); };
+      const m = modal({
+        title, size: 'sm',
+        body: h('div', { class: 'col gap-8' }, choices.map(([v, label, help]) => h('button', { class: 'choice', type: 'button', onclick: () => pickIt(v) },
+          h('div', { class: 'strong' }, label), help ? h('div', { class: 'tiny muted' }, help) : null))),
+        actions: [h('button', { class: 'btn', onclick: () => pickIt(null) }, 'Cancel')],
+        onClose: () => { if (!done) resolve(null); },
+      });
+    });
+  }
+
+  /* ---------------------------------------------------------------- add / edit departments and sections */
+  const peopleOptions = () => data.people.map((p) => [p.id, `${p.name} · ${p.emp_code}`]);
+  const strengthField = { name: 'approved_strength', label: 'Approved strength', type: 'number', min: 0, max: 100000, placeholder: 'Not set', help: 'How many people this unit is sanctioned to have. Leave empty if you don’t track it.' };
+
+  async function editDepartment(d, preset = {}) {
+    const blocked = d ? new Set([deptKey(d.id), ...descendantsOf(deptKey(d.id))]) : new Set();
+    const result = await formModal({
+      title: d ? `Edit ${d.name}` : 'Add a department', one: true,
+      fields: [
+        { name: 'name', label: 'Name', required: true },
+        { name: 'code', label: 'Code', placeholder: 'Optional, e.g. FIN' },
+        { name: 'parent_id', label: 'Part of', type: 'select', placeholder: '— Top level —', numeric: true, options: () => data.departments.filter((x) => !blocked.has(deptKey(x.id))).map((x) => [x.id, x.name]) },
+        { name: 'head_employee_id', label: 'Head of department', type: 'select', placeholder: '—', numeric: true, options: peopleOptions },
+        strengthField,
+        { name: 'color', label: 'Colour', type: 'color' },
+      ],
+      values: d ? { ...d, color: d.color || '#4f46e5' } : { color: '#4f46e5', ...preset },
+      danger: d && manage ? { label: 'Delete', onClick: () => remove('departments', d) } : null,
+      onSubmit: (v) => (d ? api.put(`/api/departments/${d.id}`, v) : api.post('/api/departments', v)),
+    });
+    if (result === 'deleted') { hideDetail(); await refresh(); return; }
+    if (!result) return;
+    toast(d ? 'Department saved' : 'Department added');
+    await refresh();
+    if (!d && result.id) centerOn(deptKey(result.id), true);
+    else if (d) showDetail({ kind: 'dept', id: deptKey(d.id) });
+  }
+
+  async function editSection(x, preset = {}) {
+    const result = await formModal({
+      title: x ? `Edit ${x.name}` : 'Add a section', one: true,
+      intro: x ? null : h('p', { class: 'muted small' }, 'A section is a team inside a department, e.g. Accounts inside Finance.'),
+      fields: [
+        { name: 'department_id', label: 'Department', type: 'select', required: true, placeholder: '— Choose —', numeric: true, options: () => data.departments.map((d) => [d.id, d.name]) },
+        { name: 'name', label: 'Section name', required: true },
+        { name: 'code', label: 'Code', placeholder: 'Optional' },
+        { name: 'head_employee_id', label: 'Head of section', type: 'select', placeholder: '—', numeric: true, options: peopleOptions },
+        strengthField,
+      ],
+      values: x ? { ...x } : { department_id: deptFilter ? Number(deptFilter) : null, ...preset },
+      danger: x && manage ? { label: 'Delete', onClick: () => remove('sections', x) } : null,
+      onSubmit: (v) => (x ? api.put(`/api/sections/${x.id}`, v) : api.post('/api/sections', v)),
+    });
+    if (result === 'deleted') { hideDetail(); await refresh(); return; }
+    if (!result) return;
+    toast(x ? 'Section saved' : 'Section added');
+    await refresh();
+    if (!x && result.id) centerOn(secKey(result.id), true);
+    else if (x) showDetail({ kind: 'section', id: secKey(x.id) });
+  }
+
+  async function remove(kind, x) {
+    const what = kind === 'sections' ? 'section' : 'department';
+    if (!(await confirmDialog(`Delete the ${x.name} ${what}?`, { ok: 'Delete', danger: true, detail: `You can only delete a ${what} with nobody in it.` }))) return false;
+    try { await api.del(`/api/${kind}/${x.id}`); toast(`${x.name} deleted`); return true; } catch (err) { errorToast(err); return false; }
   }
 
   function askMove(title, body) {
@@ -495,12 +721,39 @@ export default async function organogram(view, params, query) {
             can('employees.view') || (S.me.employee && S.me.employee.id === p.id) ? h('a', { class: 'btn sm', href: `#/employees/${p.id}` }, 'Open profile') : null,
             editable && p.manager_id ? h('button', { class: 'btn sm', onclick: () => drop({ kind: 'person', id: p.id }, null) }, 'Move to top') : null))));
     } else {
-      const d = data.departments.find((x) => x.id === src.id);
-      const members = data.people.filter((x) => x.department_id === d.id);
+      const isSec = String(src.id).startsWith('s');
+      const id = Number(String(src.id).slice(1));
+      const x = isSec ? data.sections.find((s) => s.id === id) : deptOf(id);
+      if (!x) return;
+      const members = data.people.filter((p) => (isSec ? p.section_id === x.id : p.department_id === x.id));
+      const head = x.head_employee_id ? byId().get(x.head_employee_id) : null;
+      const parent = isSec ? deptOf(x.department_id) : x.parent_id ? deptOf(x.parent_id) : null;
+      const sections = isSec ? [] : data.sections.filter((s) => s.department_id === x.id);
+      const secTotal = sections.reduce((a, s) => a + (Number(s.approved_strength) || 0), 0);
+      const person = (m) => h('a', { href: '#', class: 'row small', onclick: (e) => { e.preventDefault(); navigate(`/employees/${m.id}`); } },
+        avatar(m.name, { size: 'sm', photo: m.photo }), h('span', { class: 'grow ellipsis' }, m.name),
+        !isSec && m.section_id ? h('span', { class: 'tiny muted ellipsis', style: { maxWidth: '90px' } }, sectionName(m.section_id)) : null);
       clear(detail, h('div', { class: 'card', style: { boxShadow: 'var(--shadow-lg)' } }, h('div', { class: 'card-body' },
-        h('div', { class: 'row' }, h('h3', { class: 'grow' }, d.name), h('button', { class: 'icon-btn', onclick: hideDetail }, icon('x', 16))),
-        h('div', { class: 'small muted mb-8' }, `${members.length} ${members.length === 1 ? 'person' : 'people'}`),
-        h('div', { class: 'col gap-4', style: { maxHeight: '240px', overflow: 'auto' } }, members.map((m) => h('a', { href: '#', class: 'row small', onclick: (e) => { e.preventDefault(); navigate(`/employees/${m.id}`); } }, avatar(m.name, { size: 'sm', photo: m.photo }), m.name))))));
+        h('div', { class: 'row' }, h('div', { class: 'grow', style: { minWidth: 0 } }, h('h3', { class: 'ellipsis' }, x.name),
+          h('div', { class: 'tiny muted' }, isSec ? `Section of ${parent ? parent.name : '—'}` : parent ? `Part of ${parent.name}` : 'Top-level department')),
+        h('button', { class: 'icon-btn', onclick: hideDetail, 'aria-label': 'Close' }, icon('x', 16))),
+        h('div', { class: 'small mt-8 col gap-4' },
+          h('div', null, h('span', { class: 'muted' }, 'Head: '), head ? head.name : 'Not set'),
+          h('div', { class: 'row', style: { gap: '6px' } }, h('span', { class: 'muted' }, 'Strength:'), strength(members.length, x.approved_strength)),
+          !isSec && sections.length && x.approved_strength !== null && x.approved_strength !== undefined && secTotal > x.approved_strength
+            ? h('div', { class: 'tiny', style: { color: 'var(--warn, #b45309)' } }, `Its sections add up to ${secTotal} approved, more than the department’s ${x.approved_strength}.`) : null),
+        sections.length ? h('div', { class: 'mt-8' }, h('div', { class: 'tiny muted mb-4' }, 'Sections'),
+          h('div', { class: 'col gap-4' }, sections.map((s) => {
+            const n = data.people.filter((p) => p.section_id === s.id).length;
+            return h('a', { href: '#', class: 'row small', onclick: (e) => { e.preventDefault(); centerOn(secKey(s.id), true); showDetail({ id: secKey(s.id) }); } },
+              h('span', { class: 'grow ellipsis' }, s.name), strength(n, s.approved_strength));
+          }))) : null,
+        h('div', { class: 'tiny muted mt-8 mb-4' }, `${members.length} ${members.length === 1 ? 'person' : 'people'}`),
+        h('div', { class: 'col gap-4', style: { maxHeight: '200px', overflow: 'auto' } }, members.map(person)),
+        manage ? h('div', { class: 'row mt-16', style: { flexWrap: 'wrap', gap: '6px' } },
+          h('button', { class: 'btn sm', onclick: () => (isSec ? editSection(x) : editDepartment(x)) }, icon('edit', 14), 'Edit'),
+          isSec ? null : h('button', { class: 'btn sm', onclick: () => editSection(null, { department_id: x.id }) }, icon('plus', 14), 'Section'),
+          isSec ? null : h('button', { class: 'btn sm', onclick: () => editDepartment(null, { parent_id: x.id }) }, icon('plus', 14), 'Sub-department')) : null)));
     }
     detail.classList.remove('hidden');
   }

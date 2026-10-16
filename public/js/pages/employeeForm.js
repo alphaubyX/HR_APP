@@ -27,6 +27,12 @@ function personalFields() {
   ];
 }
 
+/** Sections, named with their department. */
+function sectionOptions() {
+  const depts = new Map((S.lookups.departments || []).map((d) => [d.id, d.name]));
+  return (S.lookups.sections || []).filter((x) => x.active).map((x) => [x.id, `${depts.get(x.department_id) || '—'} › ${x.name}`]);
+}
+
 function jobFields(isNew, nextCode) {
   return [
     { name: 'emp_code', label: 'Employee number', placeholder: nextCode || 'automatic', help: isNew ? 'Leave empty to use the next number.' : null },
@@ -34,6 +40,7 @@ function jobFields(isNew, nextCode) {
     { name: 'employment_type', label: 'Employment type', type: 'select', options: [['full_time', 'Full time'], ['part_time', 'Part time'], ['contract', 'Contract'], ['intern', 'Intern'], ['consultant', 'Consultant']] },
     { name: 'probation_days', label: 'Probation period', type: 'number', min: 0, max: 730, suffix: 'days', help: `0 = permanent from day one. Default ${S.me.org.settings.probation_days} days.` },
     { name: 'department_id', label: 'Department', type: 'select', placeholder: '—', options: sel('departments'), numeric: true },
+    { name: 'section_id', label: 'Section', type: 'select', placeholder: '— None —', options: sectionOptions, numeric: true, help: 'Choosing a section also sets its department.' },
     { name: 'designation_id', label: 'Designation', type: 'select', placeholder: '—', options: sel('designations'), numeric: true },
     { name: 'manager_id', label: 'Line manager', type: 'select', placeholder: '— No manager (top level) —', options: () => employeeOptions(), numeric: true, help: 'You can also set this by dragging on the organogram.' },
     { name: 'branch_id', label: 'Branch / office', type: 'select', placeholder: '—', options: sel('branches'), numeric: true },
@@ -97,6 +104,7 @@ export default async function employeeForm(view, params) {
     e = await api.get(`/api/employees/${params.id}`);
     geo = e.geofences || [];
     e.department_id = e.department ? e.department.id : null;
+    e.section_id = e.section ? e.section.id : null;
     e.designation_id = e.designation ? e.designation.id : null;
     e.branch_id = e.branch ? e.branch.id : null;
     e.shift_id = e.shift ? e.shift.id : null;
@@ -132,7 +140,7 @@ export default async function employeeForm(view, params) {
   };
 
   if (!isNew) {
-    view.append(pageHead(`Edit ${e.name}`, { crumbs: [{ label: 'Employees', href: '#/employees' }, { label: e.name, href: `#/employees/${e.id}` }, { label: 'Edit' }] }));
+    view.append(pageHead(`Edit ${e.name}`, { crumbs: [{ label: 'People', href: '#/employees' }, { label: e.name, href: `#/employees/${e.id}` }, { label: 'Edit' }] }));
     const save = h('button', { class: 'btn primary' }, icon('check', 16), 'Save changes');
     const err = h('div');
     save.addEventListener('click', async () => {
@@ -174,7 +182,7 @@ export default async function employeeForm(view, params) {
   let step = 0;
   const err = h('div');
   const holder = h('div');
-  view.append(pageHead('Add an employee', { crumbs: [{ label: 'Employees', href: '#/employees' }, { label: 'New' }], sub: 'They join on probation and become permanent when you confirm them.' }));
+  view.append(pageHead('Add an employee', { crumbs: [{ label: 'People', href: '#/employees' }, { label: 'New' }], sub: 'They join on probation and become permanent when you confirm them.' }));
   view.append(holder);
 
   function draw() {
