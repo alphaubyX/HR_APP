@@ -37,7 +37,7 @@ If you'd rather use an FTP account that opens higher up (e.g. your main cPanel a
 
 The upload never sends `node_modules`, `.env`, `test/`, `agent/` or your data, and only sends files that changed since the last upload.
 
-Prefer doing it by hand? Download the repository as a ZIP (**Code → Download ZIP**), upload and extract it in `broadwing-hr` so `package.json` is directly inside it.
+Prefer doing it by hand? Run `npm run build` (or ask for the package) and upload **release.tar.gz**, then extract it in `broadwing-hr` so `package.json` is directly inside it. The package is a single-file server: there is **nothing to npm install** on the web server.
 
 ## 4. Create the Node.js app
 
@@ -68,7 +68,11 @@ Environment variables (**Add Variable** for each):
 | `HR_SIGNUP` | `off` (or `on` to let companies sign up) |
 | `BROADWING_SSO_SECRET` | optional, see README |
 
-Click **Create**. Once the first upload has finished (step 3), click **Run NPM Install**, then **Restart**.
+Click **Create**, then **Restart**. Do **not** click *Run NPM Install*: the package has no dependencies, and an install on shared hosting can use up the account's process limit.
+
+Also add `HR_ORG_NAME` (your company's name): the first organization is created with it on first start.
+
+**Important:** the domain's **Document Root** (cPanel → Domains) must be a different, empty folder (e.g. `/home/CPANELUSER/hr-docroot`), never the app folder.
 
 ## 5. HTTPS
 
@@ -89,7 +93,7 @@ To start another organization: **All organizations → New organization**.
 
 ## Updating later
 
-Push to `main`: the workflow tests and uploads, and the app restarts by itself. Only when `package.json` changed (new libraries) click **Run NPM Install** and **Restart** in Setup Node.js App. Database upgrades run automatically. Your data in MySQL and `broadwing-hr-data` is not touched.
+Push to `main`: the workflow tests and uploads, and the app restarts by itself. No npm install is ever needed. Database upgrades run automatically. Your data in MySQL and `broadwing-hr-data` is not touched.
 
 ## Backups
 
@@ -98,6 +102,7 @@ Back up the MySQL database (**cPanel → Backup** or phpMyAdmin → Export) and 
 ## If something goes wrong
 
 - The app's log (`stderr.log` in `broadwing-hr`, or the log link on the app page) shows `Broadwing HR could not start: …` with the reason, e.g. a wrong database password.
+- **Open `/api/health`**: when the app can't start it stays up and says why (e.g. a missing setting or a refused database login) instead of crashing.
 - **"SQLite needs Node.js 22.13"**: you are missing `HR_DB_CLIENT=mysql`.
 - **Phone check-in says the browser can't share location**: the site is not on HTTPS.
 - **Forgot the owner password**: set `HR_OWNER_RESET_PASSWORD` = `true`, put a new `HR_OWNER_PASSWORD`, Restart, then remove the reset variable.

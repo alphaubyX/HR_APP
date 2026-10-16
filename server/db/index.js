@@ -191,7 +191,7 @@ async function openDb(cfg) {
       password: cfg.password,
       database: cfg.database,
       socketPath: cfg.socketPath || undefined,
-      connectionLimit: Number(cfg.connectionLimit) || 10,
+      connectionLimit: Number(cfg.connectionLimit) || 5,
       waitForConnections: true,
       dateStrings: true, // DATE → 'YYYY-MM-DD', DATETIME → 'YYYY-MM-DD HH:MM:SS'
       decimalNumbers: true, // DECIMAL → number
@@ -199,7 +199,12 @@ async function openDb(cfg) {
       charset: 'utf8mb4',
     });
     const db = new MysqlDb(pool);
-    await db.all('SELECT 1');
+    try {
+      await db.all('SELECT 1');
+    } catch (err) {
+      await pool.end().catch(() => {}); // don't leave a half-open pool behind when retrying
+      throw err;
+    }
     return db;
   }
   let DatabaseSync;

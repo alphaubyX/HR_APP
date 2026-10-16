@@ -99,17 +99,21 @@ async function createApp(options) {
   app.locals.SESSION_DAYS = SESSION_DAYS;
 
   const ctx = { db, options, setCookie, COOKIE, SESSION_DAYS, ROLES };
-  const routers = ['auth', 'platform', 'org', 'employees', 'salary', 'leave', 'attendance', 'payroll', 'reports'];
-  for (const name of routers) {
+  // Listed one by one (not loaded by name) so the single-file build for hosting includes them all.
+  const routers = [
+    require('./routes/auth'), require('./routes/platform'), require('./routes/org'), require('./routes/employees'),
+    require('./routes/salary'), require('./routes/leave'), require('./routes/attendance'), require('./routes/payroll'),
+    require('./routes/reports'),
+  ];
+  for (const register of routers) {
     const router = express.Router();
-    require(`./routes/${name}`)(router, ctx);
+    register(router, ctx);
     app.use('/api', router);
   }
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
   const pub = path.join(__dirname, '..', 'public');
-  app.use('/vendor/leaflet', express.static(path.join(path.dirname(require.resolve('leaflet/package.json')), 'dist'), { maxAge: '30d' }));
   app.use(express.static(pub, {
     setHeaders(res, file) {
       // the app shell must update right away after a deploy; images may be cached

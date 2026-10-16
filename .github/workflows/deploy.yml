@@ -54,13 +54,23 @@ jobs:
       - uses: actions/checkout@v4
         if: steps.check.outputs.ready == 'true'
 
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      # One-file server build: nothing to npm install on the web server
+      - name: Build the upload package
+        if: steps.check.outputs.ready == 'true'
+        run: npm ci && npm run build
+
       # cPanel (Passenger) restarts the Node app when tmp/restart.txt changes
       - name: Restart trigger
         if: steps.check.outputs.ready == 'true'
-        run: mkdir -p tmp && date > tmp/restart.txt
+        run: mkdir -p release/tmp && date > release/tmp/restart.txt
 
       # Only changed files are sent (the action keeps a small state file on the server).
-      # node_modules is never uploaded: cPanel manages it — click "Run NPM Install" when package.json changes.
       - name: Upload over FTPS
         if: steps.check.outputs.ready == 'true'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -69,20 +79,8 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftps
-          local-dir: ./
+          local-dir: ./release/
           server-dir: ${{ secrets.FTP_SERVER_DIR || './' }}
-          exclude: |
-            **/.git*
-            **/.git*/**
-            .github/**
-            node_modules/**
-            data/**
-            test/**
-            agent/**
-            .env
-            .env.example
-            *.md
-            LICENSE
 
       - name: Check the site is up
         if: steps.check.outputs.ready == 'true' && vars.SITE_URL != ''

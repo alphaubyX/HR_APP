@@ -11,13 +11,16 @@
     "start": "node --disable-warning=ExperimentalWarning server/index.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch server/index.js",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js",
-    "seed:demo": "node --disable-warning=ExperimentalWarning server/demo.js"
+    "seed:demo": "node --disable-warning=ExperimentalWarning server/demo.js",
+    "build": "node scripts/build.js"
   },
   "license": "SEE LICENSE IN LICENSE",
   "author": "Usman Bin Younos",
   "dependencies": {
     "express": "^5.2.1",
-    "leaflet": "^1.9.4",
     "mysql2": "^3.11.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2"
   }
 }
