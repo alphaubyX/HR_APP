@@ -95,6 +95,14 @@ To start another organization: **All organizations → New organization**.
 
 Push to `main`: the workflow tests and uploads, and the app restarts by itself. No npm install is ever needed. Database upgrades run automatically. Your data in MySQL and `broadwing-hr-data` is not touched.
 
+## The AI helper for recruitment (optional)
+
+1. Create an API key at https://console.anthropic.com (Settings → API keys) and add some credit.
+2. In **Setup Node.js App**, add the environment variable `ANTHROPIC_API_KEY` with that key, click **Save**, then **Restart**.
+3. Recruitment → a job → a candidate → **Read CV with AI**. Without the key the rest of recruitment works; only the AI buttons are off.
+
+CVs are kept in `HR_DATA_DIR/cvs` and deleted automatically one year after they were uploaded. Never delete the data folder when updating.
+
 ## Backups
 
 Back up the MySQL database (**cPanel → Backup** or phpMyAdmin → Export) and the `broadwing-hr-data` folder (uploaded documents).

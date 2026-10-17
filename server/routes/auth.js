@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { verifyPassword, hashPassword, sha256, ROLES } = require('../lib/auth');
+const { brandInfo } = require('../services/brand');
 const { pick, bad, HttpError } = require('../lib/validate');
 const { utcNow } = require('../lib/dates');
 const { createUser, startSession, defaultOrg, checkPassword, cleanUsername } = require('../services/accounts');
@@ -58,6 +59,7 @@ module.exports = function authRoutes(r, { db, options, setCookie, SESSION_DAYS }
       roleLabel: req.member ? req.roleName || (ROLES[req.member.role] || ROLES.employee).label : null,
       support: !!(req.member && req.member.support),
       perms: [...req.perms],
+      brand: await brandInfo(db),
       employee,
       orgs,
       unread,
@@ -73,7 +75,7 @@ module.exports = function authRoutes(r, { db, options, setCookie, SESSION_DAYS }
 
   r.get('/setup', async (req, res) => {
     const users = Number(await db.value('SELECT COUNT(*) AS n FROM users'));
-    res.json({ needsSetup: users === 0, signup: !!options.signup });
+    res.json({ needsSetup: users === 0, signup: !!options.signup, brand: await brandInfo(db) });
   });
 
   // First start on an empty database: create the owner and their organization.

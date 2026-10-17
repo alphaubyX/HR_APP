@@ -30,6 +30,7 @@ const ACTIONS = [
   { key: 'employee.exit', group: 'People', label: 'Exit, resignation or termination', method: 'POST', path: /^\/employees\/(\d+)\/exit$/, perm: 'employees.edit', employee: id },
   { key: 'employee.rehire', group: 'People', label: 'Rehire a former employee', method: 'POST', path: /^\/employees\/(\d+)\/rehire$/, perm: 'employees.edit', employee: id },
   { key: 'employee.delete', group: 'People', label: 'Delete an employee record', method: 'DELETE', path: /^\/employees\/(\d+)$/, perm: 'employees.edit', employee: id },
+  { key: 'opening.create', group: 'People', label: 'Open a new job for recruitment', method: 'POST', path: /^\/recruitment\/openings$/, perm: 'recruitment.manage' },
   { key: 'salary.revise', group: 'Pay', label: 'Salary revision', method: 'POST', path: /^\/employees\/(\d+)\/salary$/, perm: 'salary.edit', employee: id },
   { key: 'salary.bulk', group: 'Pay', label: 'Salary revision for many people', method: 'POST', path: /^\/salary\/bulk-revision$/, perm: 'salary.edit' },
   { key: 'loan.create', group: 'Pay', label: 'New loan or advance', method: 'POST', path: /^\/loans$/, perm: 'salary.edit', employee: (m, b) => b.employee_id },
@@ -195,6 +196,7 @@ async function describe(db, orgId, action, employeeId, body) {
     if (e) who = `${fullName(e)} (${e.emp_code})`;
   }
   if (action.key === 'employee.create') who = [body.first_name, body.last_name].filter(Boolean).join(' ') || 'new employee';
+  if (action.key === 'opening.create') who = body.title || null;
   if (action.key === 'holiday.create') who = [body.name, body.holiday_date].filter(Boolean).join(', ');
   return `${action.label}${who ? `: ${who}` : ''}`.slice(0, 250);
 }

@@ -36,6 +36,20 @@ const MIGRATIONS = [
       for (const o of await db.all('SELECT id FROM orgs')) await seedRoles(db, o.id);
     },
   },
+  {
+    // recruitment, platform branding; HR managers get the new recruitment right
+    version: 4,
+    async up(db) {
+      for (const t of ['job_openings', 'candidates', 'platform_settings']) {
+        for (const stmt of tableDdl(t, TABLES[t], db.dialect)) await db.run(stmt);
+      }
+      for (const r of await db.all("SELECT id, perms FROM roles WHERE role_key = 'hr' AND is_system = 1")) {
+        let perms = [];
+        try { perms = JSON.parse(r.perms || '[]'); } catch { /* keep empty */ }
+        if (!perms.includes('recruitment.manage')) await db.run('UPDATE roles SET perms = ? WHERE id = ?', [JSON.stringify([...perms, 'recruitment.manage']), r.id]);
+      }
+    },
+  },
 ];
 
 /** Add a column unless it is already there (a new database gets it from version 1). */

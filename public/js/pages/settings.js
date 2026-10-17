@@ -37,16 +37,23 @@ export default async function settings(view, params) {
   const allowed = SECTIONS.filter((s) => s.grp || can(s.perm));
   const first = allowed.find((s) => s.id);
   if (!first) throw new Error('You cannot change settings.');
+  // On a phone, /settings is a list of all settings; tapping one opens just that page.
+  const phone = window.matchMedia('(max-width: 900px)').matches;
   const tab = params.tab && allowed.some((s) => s.id === params.tab) ? params.tab : first.id;
   await loadLookups(true);
   const org = await api.get('/api/org');
-  view.append(pageHead('Settings', { sub: `${org.org.name} · changes apply to this organization only.` }));
+  const current = allowed.find((s) => s.id === tab);
+  view.append(pageHead(phone && params.tab ? current.label : 'Settings', {
+    sub: phone && params.tab ? null : `${org.org.name} · changes apply to this organization only.`,
+    crumbs: phone && params.tab ? [{ label: 'Settings', href: '#/settings' }, { label: current.label }] : null,
+  }));
   const nav = h('nav', { class: 'settings-nav' }, allowed.map((s, i) => {
     if (s.grp) return allowed[i + 1] && allowed[i + 1].id ? h('div', { class: 'grp' }, s.grp) : null;
-    return h('a', { href: `#/settings/${s.id}`, class: s.id === tab ? 'on' : '' }, icon(s.icon, 16), s.label);
+    return h('a', { href: `#/settings/${s.id}`, class: s.id === tab && !(phone && !params.tab) ? 'on' : '' }, icon(s.icon, 16), h('span', { class: 'grow' }, s.label), h('span', { class: 'chev' }, icon('right', 16)));
   }));
-  const body = h('div', { style: { minWidth: 0 } });
-  view.append(h('div', { class: 'settings-layout' }, nav, body));
+  const body = h('div', { class: 'settings-body', style: { minWidth: 0 } });
+  view.append(h('div', { class: ['settings-layout', params.tab ? 'm-page' : 'm-list'] }, nav, body));
+  if (phone && !params.tab) return;
   const ctx = { org, reload: () => navigate(`/settings/${tab}`) };
   const fn = {
     company, general, branches, departments, designations, shifts, policies, holidays, leave: leaveTypes, components, structures, tax, users, roles, workflows, checklists, audit,

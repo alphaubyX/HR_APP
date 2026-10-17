@@ -559,6 +559,7 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
 .settings-nav a { padding: 8px 12px; border-radius: 8px; color: var(--text-2); font-weight: 550; text-decoration: none; display: flex; align-items: center; gap: 9px; }
 .settings-nav a:hover { background: var(--panel); }
 .settings-nav a.on { background: var(--brand-soft); color: var(--brand); }
+.settings-nav .chev { display: none; }
 .settings-nav .grp { font-size: 10.5px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); padding: 12px 12px 4px; }
 
 /* ---------------------------------------------------------------- responsive */
@@ -583,8 +584,13 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
   .org-tray { display: none; }
   .org-canvas { border-left: 1px solid var(--line); border-radius: var(--radius); }
   .settings-layout { grid-template-columns: 1fr; }
-  .settings-nav { position: static; flex-direction: row; overflow-x: auto; }
-  .settings-nav .grp { display: none; }
+  /* phone: the settings are one list, top to bottom; a tapped setting opens on its own */
+  .settings-layout.m-list .settings-body, .settings-layout.m-page .settings-nav { display: none; }
+  .settings-nav { position: static; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 0; gap: 0; }
+  .settings-nav a { padding: 14px 16px; border-radius: 0; border-top: 1px solid var(--line-2); font-size: 15px; }
+  .settings-nav .grp + a { border-top: 0; }
+  .settings-nav .grp { padding: 16px 16px 6px; }
+  .settings-nav .chev { display: inline-flex; color: var(--faint); }
   .bottom-nav {
     display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--panel);
     border-top: 1px solid var(--line); padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
@@ -631,3 +637,50 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
 .wf-step { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
 .wf-step.initiator { background: var(--panel-2); }
 .wf-num { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); font-weight: 700; font-size: 12px; flex: none; }
+
+/* recruitment */
+.job-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.job-card { display: block; padding: 16px 18px; color: inherit; text-decoration: none !important; transition: box-shadow .15s, border-color .15s; }
+.job-card:hover { box-shadow: var(--shadow-lg); border-color: var(--brand); }
+.job-card h3 { font-size: 16px; }
+.job-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-2); text-align: center; }
+.job-stats strong { display: block; font-size: 18px; }
+.job-stats span { font-size: 11px; color: var(--muted); }
+.job-desc { white-space: pre-wrap; line-height: 1.55; color: var(--text-2); }
+.rec-layout { grid-template-columns: minmax(0, 1fr) 380px; align-items: start; }
+.chip-picks { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip-pick { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 99px; cursor: pointer; font-size: 13px; background: var(--panel); }
+.chip-pick:has(input:checked) { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.fit { width: 30px; height: 30px; border-radius: 50%; display: inline-grid; place-items: center; font-weight: 800; font-size: 13px; color: #fff; flex: none; }
+.fit.ok { background: var(--ok); } .fit.warn { background: #d97706; } .fit.bad { background: var(--bad); }
+.ai-box { border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; background: linear-gradient(180deg, var(--brand-softer), var(--panel)); }
+.ai-list { margin: 0; padding-left: 18px; font-size: 13.5px; }
+.ai-list li + li { margin-top: 3px; }
+.rank-list { padding-left: 22px; margin: 0; }
+.rank-list li + li { margin-top: 10px; }
+@media (max-width: 1100px) { .rec-layout { grid-template-columns: 1fr; } }
+
+/* uploaded logos: white on the blue bars */
+.on-dark { filter: brightness(0) invert(1); }
+.brand-wide { height: 26px; max-width: 160px; object-fit: contain; display: block; }
+.brand img.brand-mark { object-fit: contain; }
+.auth-art .brand-big { flex-direction: column; align-items: flex-start; gap: 10px; }
+.auth-art .brand-logo { height: 96px; max-width: 260px; object-fit: contain; }
+.topbar-brand img { object-fit: contain; }
+.brand-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.brand-previews { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; height: 90px; }
+.brand-previews > div { display: grid; place-items: center; padding: 10px; }
+.brand-previews .on-white { background: #fff; }
+.brand-previews .on-blue { background: var(--bw-bar); }
+.brand-previews img { max-width: 100%; max-height: 64px; object-fit: contain; }
+
+/* public job application page */
+.apply-page { background: var(--bg); min-height: 100vh; }
+.apply-bar { height: 60px; display: flex; align-items: center; gap: 12px; padding: 0 20px; background: var(--bw-bar); color: #fff; font-weight: 600; letter-spacing: .02em; }
+.apply-bar img { width: 34px; height: 24px; object-fit: contain; }
+.apply-main { max-width: 760px; margin: 0 auto; padding: 24px 16px 60px; }
+.apply-card { padding: 28px; }
+.apply-card h1 { font-size: 26px; }
+.apply-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.btn.block { width: 100%; justify-content: center; }

@@ -46,4 +46,11 @@ module.exports = function platformRoutes(r, { db }) {
     await db.update('orgs', { id: org.id }, b);
     res.json({ ok: true });
   });
+
+  /** The product logos (Broadwing's original artwork), used by every organization. */
+  r.put('/platform/brand/:slot', ownerOnly, async (req, res) => {
+    const { saveBrand } = require('../services/brand');
+    await saveBrand(db, req.params.slot, req.body && req.body.data ? String(req.body.data) : null);
+    res.json({ ok: true });
+  });
 };

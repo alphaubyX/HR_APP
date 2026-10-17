@@ -30,6 +30,7 @@ const PERMISSION_DEFS = [
   { key: 'workflows.manage', group: 'Organization', label: 'Set up approval workflows and act on any approval' },
   { key: 'employees.view', group: 'People', label: 'See every employee' },
   { key: 'employees.edit', group: 'People', label: 'Add and change employees, confirm, exit, organogram' },
+  { key: 'recruitment.manage', group: 'People', label: 'Recruitment: job openings, candidates and CVs' },
   { key: 'attendance.view', group: 'Time', label: 'See everyone’s attendance' },
   { key: 'attendance.manage', group: 'Time', label: 'Correct attendance, machines and imports' },
   { key: 'leave.view', group: 'Time', label: 'See everyone’s leave' },
@@ -50,7 +51,7 @@ const ROLES = {
     label: 'HR manager',
     description: 'Runs people, time and leave.',
     perms: ['org.manage', 'employees.view', 'employees.edit', 'salary.view', 'attendance.view', 'attendance.manage',
-      'leave.view', 'leave.manage', 'payroll.view', 'reports.view', 'users.manage'],
+      'leave.view', 'leave.manage', 'payroll.view', 'reports.view', 'users.manage', 'recruitment.manage'],
   },
   payroll: {
     label: 'Payroll officer',

@@ -7,6 +7,7 @@ const { HttpError } = require('./lib/validate');
 const { sha256, ROLES } = require('./lib/auth');
 const { roleInfo } = require('./services/roles');
 const workflows = require('./services/workflows');
+const { serveBrand } = require('./services/brand');
 const { utcNow, utcPlus } = require('./lib/dates');
 const { orgSettings } = require('./engine/policy');
 
@@ -122,7 +123,7 @@ async function createApp(options) {
   const routers = [
     require('./routes/auth'), require('./routes/platform'), require('./routes/org'), require('./routes/employees'),
     require('./routes/salary'), require('./routes/leave'), require('./routes/attendance'), require('./routes/payroll'),
-    require('./routes/reports'), require('./routes/workflows'),
+    require('./routes/reports'), require('./routes/workflows'), require('./routes/recruitment'),
   ];
   for (const register of routers) {
     const router = express.Router();
@@ -139,6 +140,10 @@ async function createApp(options) {
       if (/\.(html|js|css|webmanifest)$/.test(file)) res.set('Cache-Control', 'no-cache');
     },
   }));
+  // the product logos (uploaded by the server owner, or the built-in wing) and the public job page
+  app.get('/brand/:slot', serveBrand(db, path.join(pub, 'img', 'icon.svg')));
+  app.get('/favicon.ico', serveBrand(db, path.join(pub, 'img', 'icon.svg')));
+  app.get('/apply/:token', (req, res) => res.sendFile(path.join(pub, 'apply.html')));
   app.get(/^\/(?!api\/|iclock\/).*/, (req, res) => res.sendFile(path.join(pub, 'index.html')));
 
   app.use((err, req, res, next) => {

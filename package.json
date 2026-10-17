@@ -17,8 +17,10 @@
   "license": "SEE LICENSE IN LICENSE",
   "author": "Usman Bin Younos",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
     "express": "^5.2.1",
-    "mysql2": "^3.11.0"
+    "mysql2": "^3.11.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "esbuild": "^0.24.2"

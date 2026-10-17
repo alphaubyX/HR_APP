@@ -41,6 +41,8 @@ const ROUTES = [
   ['settings', () => import('./pages/settings.js')],
   ['settings/:tab', () => import('./pages/settings.js')],
   ['platform', () => import('./pages/platform.js')],
+  ['recruitment', () => import('./pages/recruitment.js')],
+  ['recruitment/:id', () => import('./pages/recruitment.js')],
 ];
 
 function match(path) {
@@ -92,6 +94,7 @@ function navItems() {
   g('People', [
     (can('employees.view') || isManager()) && { path: 'employees', label: 'People', icon: 'users' },
     (can('employees.view') || hasEmployee()) && { path: 'organogram', label: 'Organogram', icon: 'org' },
+    can('recruitment.manage') && { path: 'recruitment', label: 'Recruitment', icon: 'briefcase' },
   ]);
   g('Time', [
     (can('attendance.view') || isManager()) && { path: 'attendance', label: 'Attendance', icon: 'clock' },
@@ -135,6 +138,7 @@ function orgLogo(org) {
 }
 
 function drawShell() {
+  if (S.me && S.me.brand) setBrand(S.me.brand);
   const { path } = parseHash();
   const me = S.me;
   clear(shell.side,
@@ -154,7 +158,7 @@ function drawShell() {
   const searchBox = can('employees.view') || isManager() ? employeeSearch() : null;
   clear(shell.top,
     h('button', { class: 'icon-btn menu-btn', 'aria-label': 'Menu', onclick: () => shell.el.classList.toggle('nav-open') }, icon('menu')),
-    h('a', { class: 'topbar-brand', href: '#/', 'aria-label': 'Broadwing HR' }, h('img', { src: '/img/wing-white.svg', alt: '' }), h('span', { class: 'brand-name' }, 'HR')),
+    h('a', { class: 'topbar-brand', href: '#/', 'aria-label': 'Broadwing HR' }, wingImg(''), h('span', { class: 'brand-name' }, 'HR')),
     h('div', { class: 'spacer' }), searchBox,
     h('button', { class: 'icon-btn', title: 'Theme', 'aria-label': 'Change theme', onclick: (e) => themeMenu(e.currentTarget) }, icon(document.documentElement.dataset.theme === 'dark' ? 'moon' : 'sun')),
     h('button', { class: 'icon-btn', title: 'Notifications', 'aria-label': 'Notifications', onclick: (e) => notifications(e.currentTarget) },
@@ -169,10 +173,25 @@ function drawShell() {
   clear(shell.bottom, quick.map(([p, l, ic]) => h('a', { href: `#/${p}`, class: p === path ? 'on' : '' }, icon(ic, 20), l)));
 }
 
-/** The Broadwing wing and name, as on the main Broadwing site. */
-function brandMark() {
-  return h('div', { class: 'brand' }, h('img', { class: 'brand-mark', src: '/img/wing-white.svg', alt: '' }),
-    h('span', { class: 'brand-name' }, 'Broad Wing', h('b', null, 'HR')));
+/*
+ * The Broadwing logos. The server owner uploads the original artwork (All organizations →
+ * Branding); until then the built-in wing is used. On the blue bars the logos are shown in white.
+ */
+let brand = { mark: false, horizontal: false, logo: false, v: 0 };
+function setBrand(b) {
+  if (!b) return;
+  brand = b;
+  const link = document.querySelector('link[rel="icon"]');
+  if (link && b.mark) { link.href = `/brand/mark?v=${b.v}`; link.removeAttribute('type'); }
+}
+const brandSrc = (slot) => `/brand/${slot}?v=${brand.v}`;
+const wingImg = (cls = 'brand-mark') => (brand.mark ? h('img', { class: `${cls} on-dark`, src: brandSrc('mark'), alt: '' }) : h('img', { class: cls, src: '/img/wing-white.svg', alt: '' }));
+
+/** The Broadwing logo and name, as on the main Broadwing site. big = the sign-in page. */
+function brandMark(big = false) {
+  if (big && brand.logo) return h('div', { class: 'brand brand-big' }, h('img', { class: 'brand-logo on-dark', src: brandSrc('logo'), alt: 'Broadwing' }), h('span', { class: 'brand-name' }, h('b', null, 'HR')));
+  if (brand.horizontal) return h('div', { class: 'brand' }, h('img', { class: 'brand-wide on-dark', src: brandSrc('horizontal'), alt: 'Broadwing' }), h('span', { class: 'brand-name' }, h('b', null, 'HR')));
+  return h('div', { class: 'brand' }, wingImg(), h('span', { class: 'brand-name' }, 'Broad Wing', h('b', null, 'HR')));
 }
 
 // "/" anywhere opens the person finder of the current top bar
@@ -325,12 +344,13 @@ async function refreshCounts() {
 async function showLogin() {
   shell = null;
   const status = await api.get('/api/setup').catch(() => ({ needsSetup: false, signup: false }));
+  setBrand(status.brand);
   const mode = status.needsSetup ? 'setup' : location.hash === '#signup' && status.signup ? 'signup' : 'login';
   const box = h('div', { class: 'auth-box' });
   const feats = [['users', 'Employees & onboarding'], ['org', 'Drag-and-drop organogram'], ['calendar', 'Leave with approvals'], ['finger', 'Machine & mobile attendance'], ['pin', 'Geofenced check-in'], ['wallet', 'Payroll & payslips']];
   clear(root, h('div', { class: 'auth' },
     h('div', { class: 'auth-art' },
-      brandMark(),
+      brandMark(true),
       h('div', null, h('h1', null, 'Your people, time and payroll in one place.'), h('p', null, 'From onboarding and probation to attendance, leave approvals and payslips — built for growing teams.')),
       h('div', { class: 'auth-feats' }, feats.map(([i, t]) => h('div', { class: 'auth-feat' }, icon(i, 18), t)))),
     h('div', { class: 'auth-form' }, box)));

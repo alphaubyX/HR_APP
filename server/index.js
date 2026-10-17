@@ -109,7 +109,7 @@ async function main() {
       });
       if (msg) console.log(msg);
       await ensureFirstOrg(db);
-      startScheduler(db);
+      startScheduler(db, { dataDir });
       handler = app;
       console.log(cfg.client === 'mysql' ? `Database: MySQL ${cfg.database} on ${cfg.host}` : `Database: SQLite file ${cfg.file}`);
       return;

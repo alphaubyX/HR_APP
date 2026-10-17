@@ -15,6 +15,7 @@ const { ensureAllocations } = require('./services/leave');
 const { escalate } = require('./services/approvals');
 const { loadOrg, usersWithPerm, notifyUsers, fullName } = require('./services/common');
 const { leaveYearOf } = require('./engine/leave');
+const { purgeExpiredCvs } = require('./services/recruitment');
 
 async function onceA(db, name, key, fn) {
   const row = await db.get('SELECT * FROM jobs WHERE name = ?', [name]);
@@ -25,7 +26,7 @@ async function onceA(db, name, key, fn) {
   return true;
 }
 
-async function periodic(db) {
+async function periodic(db, dataDir = null) {
   const orgs = await db.all("SELECT id FROM orgs WHERE status = 'active'");
   for (const { id } of orgs) {
     try {
@@ -52,17 +53,22 @@ async function periodic(db) {
   }
   // old sessions and read notifications
   await db.run('DELETE FROM sessions WHERE expires_at < ?', [utcNow()]);
+  // CVs (and their AI reviews) are kept for one year only
+  if (dataDir) {
+    const n = await purgeExpiredCvs(db, dataDir);
+    if (n) console.log(`Deleted ${n} CV${n > 1 ? 's' : ''} older than a year.`);
+  }
 }
 
-function startScheduler(db) {
+function startScheduler(db, { dataDir = null } = {}) {
   let busy = false;
   const fast = setInterval(() => { flushDirty(db).catch((e) => console.error('Attendance update failed:', e.message)); }, 5000);
   const slow = setInterval(async () => {
     if (busy) return;
     busy = true;
-    try { await periodic(db); } finally { busy = false; }
+    try { await periodic(db, dataDir); } finally { busy = false; }
   }, 15 * 60000);
-  setTimeout(() => periodic(db).catch((e) => console.error(e)), 10000);
+  setTimeout(() => periodic(db, dataDir).catch((e) => console.error(e)), 10000);
   fast.unref(); slow.unref();
   return () => { clearInterval(fast); clearInterval(slow); };
 }

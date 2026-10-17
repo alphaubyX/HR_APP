@@ -119,6 +119,69 @@ const TABLES = {
     },
     indexes: [['user_id,org_id,read_at']],
   },
+  /* -------------------------------------------------- recruitment */
+  job_openings: {
+    cols: {
+      id: 'id',
+      org_id: 'int!',
+      title: 'str:150!',
+      description: 'text',
+      department_id: 'int',
+      section_id: 'int',
+      designation_id: 'int',
+      replaces_employee_id: 'int', // hiring for someone's existing position on the organogram
+      branch_id: 'int',
+      location: 'str:150',
+      positions: 'int!=1',
+      salary_min: 'money',
+      salary_max: 'money',
+      deadline: 'date',
+      status: 'str:20!=open', // open | on_hold | closed | filled
+      advertised: 'bool!=0',
+      platforms: 'text', // JSON list: LinkedIn, Rozee.pk, Indeed, newspaper …
+      ad_link: 'str:400',
+      accept_online: 'bool!=1', // candidates can apply with the public link
+      public_token: 'str:40', // the public link's key
+      created_by: 'int',
+      created_at: 'datetime!',
+      updated_at: 'datetime',
+    },
+    indexes: [['org_id,status'], ['public_token', 'unique']],
+  },
+  candidates: {
+    cols: {
+      id: 'id',
+      org_id: 'int!',
+      opening_id: 'int!',
+      name: 'str:150!',
+      email: 'str:150',
+      phone: 'str:50',
+      source: 'str:60', // where they came from: Applied online, LinkedIn, referral …
+      stage: 'str:20!=new', // new | shortlisted | interview | offer | hired | rejected
+      rating: 'int',
+      notes: 'text',
+      cv_file: 'str:80', // stored file name under data/cvs (PDF only)
+      cv_name: 'str:200',
+      cv_size: 'int',
+      cv_uploaded_at: 'datetime',
+      cv_expires_at: 'datetime', // CV and its AI review are deleted after a year
+      cv_deleted_at: 'datetime',
+      ai: 'text', // JSON assessment from the AI helper
+      ai_score: 'int',
+      ai_recommendation: 'str:20',
+      ai_at: 'datetime',
+      created_at: 'datetime!',
+      updated_at: 'datetime',
+    },
+    indexes: [['org_id,opening_id'], ['cv_expires_at']],
+  },
+
+  /* -------------------------------------------------- platform */
+  platform_settings: {
+    cols: { id: 'id', skey: 'str:60!', value: 'text', updated_at: 'datetime' }, // e.g. brand logos
+    indexes: [['skey', 'unique']],
+  },
+
   /* -------------------------------------------------- approval workflows */
   workflows: {
     cols: {

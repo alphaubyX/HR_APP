@@ -1,7 +1,7 @@
 // For the server owner: every organization (customer) on this server.
 import { api } from '../api.js';
 import { S, navigate } from '../state.js';
-import { h, icon, pageHead, card, table, badge, formModal, toast, errorToast, date } from '../ui.js';
+import { h, icon, pageHead, card, table, badge, formModal, toast, errorToast, date, pickFile, readFile, confirmDialog } from '../ui.js';
 
 export default async function platform(view) {
   if (!S.me.user.is_owner) throw new Error('Only the server owner can see this page.');
@@ -52,4 +52,36 @@ export default async function platform(view) {
       { key: 'x', label: '', render: (o) => h('div', { class: 'row gap-4' }, h('button', { class: 'btn xs', onclick: () => edit(o) }, 'Plan & status'), h('button', { class: 'btn xs primary', onclick: () => open(o) }, 'Open')) },
     ],
   }), { flush: true }));
+  view.append(h('div', { class: 'mt-16' }), brandingCard(reload));
+}
+
+/** Broadwing's own logos, used by every organization: upload the original artwork once. */
+function brandingCard(reload) {
+  const b = S.me.brand || {};
+  const slots = [
+    ['mark', 'Wing (icon)', 'The wing on its own. Used as the browser tab icon and on phones.'],
+    ['horizontal', 'Logo for the menu bar', 'Wing and “BROAD WING” side by side, like the top bar of broadwing.one.'],
+    ['logo', 'Full logo', 'The stacked logo (wing above the name). Shown on the sign-in page.'],
+  ];
+  const upload = async (slot) => {
+    const file = await pickFile('image/png,image/svg+xml,image/webp');
+    if (!file) return;
+    if (file.size > 1024 * 1024) { errorToast(new Error('The image must be under 1 MB.')); return; }
+    try { await api.put(`/api/platform/brand/${slot}`, { data: await readFile(file, true) }); toast('Logo saved'); location.reload(); } catch (e) { errorToast(e); }
+  };
+  const remove = async (slot) => {
+    if (!(await confirmDialog('Go back to the built-in wing for this spot?', { ok: 'Remove' }))) return;
+    try { await api.put(`/api/platform/brand/${slot}`, { data: null }); toast('Removed'); location.reload(); } catch (e) { errorToast(e); }
+  };
+  return card('Branding', h('div', { class: 'card-body' },
+    h('p', { class: 'muted small mb-16' }, 'Upload Broadwing’s original logo files (PNG with a transparent background, or SVG). On the blue bars the app shows them in white automatically. They are kept in the database, so app updates never replace them.'),
+    h('div', { class: 'brand-slots' }, slots.map(([slot, title, help]) => h('div', { class: 'brand-slot' },
+      h('div', { class: 'brand-previews' },
+        h('div', { class: 'on-white' }, h('img', { src: `/brand/${slot}?v=${b.v || 0}`, alt: '' })),
+        h('div', { class: 'on-blue' }, h('img', { class: 'on-dark', src: `/brand/${slot}?v=${b.v || 0}`, alt: '' }))),
+      h('div', { class: 'strong mt-8' }, title, b[slot] ? null : h('span', { class: 'tiny muted' }, ' · built-in wing')),
+      h('div', { class: 'tiny muted' }, help),
+      h('div', { class: 'row mt-8', style: { gap: '6px' } },
+        h('button', { class: 'btn sm', onclick: () => upload(slot) }, icon('upload', 14), b[slot] ? 'Replace' : 'Upload'),
+        b[slot] ? h('button', { class: 'btn sm', onclick: () => remove(slot) }, 'Remove') : null))))));
 }
