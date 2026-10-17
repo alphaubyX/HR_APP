@@ -13,12 +13,12 @@ export default async function dashboard(view) {
   if (can('employees.edit')) actions.push(h('a', { class: 'btn primary', href: '#/employees/new' }, icon('plus', 16), 'Add employee'));
   view.append(pageHead(`${hello}, ${me.user.name.split(' ')[0]}`, { sub: `${me.org.name} · ${date(d.today)}`, actions }));
 
-  const approvalsTotal = d.approvals.leave + d.approvals.corrections;
+  const approvalsTotal = d.approvals.leave + d.approvals.corrections + (d.approvals.requests || 0);
   if (approvalsTotal) {
     view.append(h('a', { href: '#/approvals', class: 'card mb-16', style: { display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 18px', textDecoration: 'none', color: 'inherit', borderColor: 'var(--warn)' } },
       h('span', { class: 'stat-icon', style: { position: 'static', width: '36px', height: '36px', borderRadius: '10px', display: 'grid', placeItems: 'center', background: 'var(--warn-soft)', color: 'var(--warn)' } }, icon('inbox', 18)),
       h('div', { class: 'grow' }, h('div', { class: 'strong' }, `${approvalsTotal} request${approvalsTotal > 1 ? 's' : ''} waiting for you`),
-        h('div', { class: 'small muted' }, [d.approvals.leave && `${d.approvals.leave} leave`, d.approvals.corrections && `${d.approvals.corrections} attendance correction${d.approvals.corrections > 1 ? 's' : ''}`].filter(Boolean).join(' · '))),
+        h('div', { class: 'small muted' }, [d.approvals.requests && `${d.approvals.requests} request${d.approvals.requests > 1 ? 's' : ''}`, d.approvals.leave && `${d.approvals.leave} leave`, d.approvals.corrections && `${d.approvals.corrections} attendance correction${d.approvals.corrections > 1 ? 's' : ''}`].filter(Boolean).join(' · '))),
       h('span', { class: 'btn sm' }, 'Review', icon('right', 14))));
   }
 

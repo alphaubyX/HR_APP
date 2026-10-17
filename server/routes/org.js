@@ -1,6 +1,7 @@
 'use strict';
 
-const { need, inOrg, ROLES, hashPassword } = require('../lib/auth');
+const { need, inOrg, hashPassword } = require('../lib/auth');
+const { loadRoles, checkRoleAssign } = require('../services/roles');
 const { pick, bad, notFound } = require('../lib/validate');
 const { utcNow, isTimeZone, isTime } = require('../lib/dates');
 const { ORG_SETTINGS, POLICY_RULES, orgSettings, policyRules } = require('../engine/policy');
@@ -13,7 +14,8 @@ module.exports = function orgRoutes(r, { db }) {
   r.get('/org', inOrg, async (req, res) => {
     const org = await db.get('SELECT * FROM orgs WHERE id = ?', [req.org.id]);
     org.settings = orgSettings(org.settings);
-    res.json({ org, settingDefs: ORG_SETTINGS, policyDefs: POLICY_RULES, roles: ROLES });
+    const roles = Object.fromEntries((await loadRoles(db, req.org.id)).map((x) => [x.role_key, { label: x.name, perms: x.perms, description: x.description }]));
+    res.json({ org, settingDefs: ORG_SETTINGS, policyDefs: POLICY_RULES, roles });
   });
 
   r.put('/org', need('org.manage'), async (req, res) => {
@@ -53,6 +55,7 @@ module.exports = function orgRoutes(r, { db }) {
     res.json({
       branches: await q('SELECT id, name, code, lat, lng, radius_m, active FROM branches WHERE org_id = ? ORDER BY name'),
       departments: await q('SELECT id, name, code, parent_id, head_employee_id, color, approved_strength, active FROM departments WHERE org_id = ? ORDER BY sort, name'),
+      roles: await q('SELECT role_key, name FROM roles WHERE org_id = ? ORDER BY sort, name'),
       sections: await q('SELECT id, department_id, name, code, head_employee_id, approved_strength, active FROM sections WHERE org_id = ? ORDER BY sort, name'),
       designations: await q('SELECT id, name, grade_id, active FROM designations WHERE org_id = ? ORDER BY sort, name'),
       grades: await q('SELECT id, name, min_salary, max_salary, structure_id, active FROM grades WHERE org_id = ? ORDER BY sort, name'),
@@ -225,8 +228,8 @@ module.exports = function orgRoutes(r, { db }) {
        FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.org_id = ? ORDER BY u.name`, [req.org.id]));
   });
 
-  const roleOk = (req, role) => {
-    if (!ROLES[role]) throw bad('Unknown role.');
+  const roleOk = async (req, role) => {
+    await checkRoleAssign(db, req, role);
     if (role === 'admin' && req.member.role !== 'admin') throw bad('Only an administrator can make someone an administrator.');
   };
 
@@ -245,7 +248,7 @@ module.exports = function orgRoutes(r, { db }) {
       username: ['str', { required: true, max: 40 }], name: ['str', { max: 150 }], email: ['email'],
       role: ['str', { default: 'employee' }], employee_id: ['id'],
     });
-    roleOk(req, b.role);
+    await roleOk(req, b.role);
     const employeeId = await checkEmployee(req, b.employee_id);
     const uname = cleanUsername(b.username);
     let user = await db.get('SELECT * FROM users WHERE username = ?', [uname]);
@@ -266,7 +269,7 @@ module.exports = function orgRoutes(r, { db }) {
     const m = await db.get('SELECT * FROM memberships WHERE id = ? AND org_id = ?', [req.params.id, req.org.id]);
     if (!m) throw notFound('User');
     const b = pick(req.body, { role: ['str'], employee_id: ['id'], active: ['bool'] }, { partial: true });
-    if (b.role) roleOk(req, b.role);
+    if (b.role) await roleOk(req, b.role);
     if (m.role === 'admin' && req.member.role !== 'admin') throw bad('Only an administrator can change another administrator.');
     if (m.user_id === req.user.id && (b.role && b.role !== m.role || b.active === 0)) throw bad('You cannot change your own role or switch yourself off.');
     if ('employee_id' in b) b.employee_id = await checkEmployee(req, b.employee_id, m.id);

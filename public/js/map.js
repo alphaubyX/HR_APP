@@ -24,6 +24,9 @@ export async function makeMap(el, { lat = 30.3753, lng = 69.3451, zoom = 5 } = {
   const map = L.map(el, { zoomControl: true, attributionControl: true }).setView([lat, lng], zoom);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
+    // OpenStreetMap refuses tiles to requests that don't say which site they come from; send only
+    // the site's address (the rest of the app sends nothing to other sites)
+    referrerPolicy: 'strict-origin-when-cross-origin',
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
   setTimeout(() => map.invalidateSize(), 50);

@@ -6,6 +6,7 @@ import {
   pickFile, shrinkImage, DOW, empty, utcToLocal, modal, todayLocal,
 } from '../ui.js';
 import { makeMap } from '../map.js';
+import { roles, workflows } from './access.js';
 
 const SECTIONS = [
   { grp: 'Organization' },
@@ -25,7 +26,9 @@ const SECTIONS = [
   { id: 'structures', label: 'Salary structures', icon: 'layers', perm: 'salary.view' },
   { id: 'tax', label: 'Income tax slabs', icon: 'percent', perm: 'salary.view' },
   { grp: 'People' },
-  { id: 'users', label: 'Users & roles', icon: 'key', perm: 'users.manage' },
+  { id: 'users', label: 'Users', icon: 'key', perm: 'users.manage' },
+  { id: 'roles', label: 'Roles & rights', icon: 'shield', perm: 'users.manage' },
+  { id: 'workflows', label: 'Approval workflows', icon: 'layers', perm: 'workflows.manage' },
   { id: 'checklists', label: 'Onboarding & exit lists', icon: 'checkCircle', perm: 'org.manage' },
   { id: 'audit', label: 'Activity log', icon: 'history', perm: 'org.manage' },
 ];
@@ -46,7 +49,7 @@ export default async function settings(view, params) {
   view.append(h('div', { class: 'settings-layout' }, nav, body));
   const ctx = { org, reload: () => navigate(`/settings/${tab}`) };
   const fn = {
-    company, general, branches, departments, designations, shifts, policies, holidays, leave: leaveTypes, components, structures, tax, users, checklists, audit,
+    company, general, branches, departments, designations, shifts, policies, holidays, leave: leaveTypes, components, structures, tax, users, roles, workflows, checklists, audit,
   }[tab];
   await fn(body, ctx);
 }
@@ -167,7 +170,7 @@ async function branches(body, ctx) {
       if (!marker) {
         marker = L.marker([lat, lng], { draggable: true }).addTo(map);
         marker.on('dragend', () => { const p = marker.getLatLng(); lat = p.lat; lng = p.lng; circle.setLatLng(p); drawCoords(); });
-        circle = L.circle([lat, lng], { radius, color: '#4f46e5', weight: 2, fillOpacity: 0.12 }).addTo(map);
+        circle = L.circle([lat, lng], { radius, color: '#1f72a6', weight: 2, fillOpacity: 0.12 }).addTo(map);
       } else { marker.setLatLng([lat, lng]); circle.setLatLng([lat, lng]); }
       circle.setRadius(radius);
     };
@@ -232,7 +235,7 @@ async function departments(body, ctx) {
       { name: 'color', label: 'Colour', type: 'color' }, { name: 'sort', label: 'Order', type: 'number' },
       { name: 'active', label: 'Active', type: 'checkbox', default: true },
     ],
-    values: { color: '#4f46e5', active: true, sort: 0 },
+    values: { color: '#1f72a6', active: true, sort: 0 },
     columns: [
       { key: 'name', label: 'Department', render: (d) => h('span', { class: 'row' }, h('span', { class: 'swatch', style: { background: d.color || 'var(--faint)' } }), h('strong', null, d.name), d.code ? h('span', { class: 'tiny muted' }, d.code) : null) },
       { key: 'parent', label: 'Part of', render: (d) => lookupName('departments', d.parent_id) },
@@ -565,8 +568,8 @@ function pkSalaried() {
 /* ------------------------------------------------------------------ users */
 async function users(body, ctx) {
   const rows = await api.get('/api/users');
-  const roles = ctx.org.roles;
-  const roleOpts = Object.entries(roles).map(([k, r]) => [k, r.label]);
+  const roleList = ctx.org.roles;
+  const roleOpts = Object.entries(roleList).map(([k, r]) => [k, r.label]);
   const linked = new Set(rows.map((r) => r.employee_id).filter(Boolean));
   const add = async () => {
     const ok = await formModal({
@@ -601,14 +604,14 @@ async function users(body, ctx) {
     });
     if (ok && ok !== 'deleted') { toast('Saved'); ctx.reload(); }
   };
-  body.append(card('Users & roles', h('div', null,
-    h('div', { style: { padding: '14px 18px 0' } }, alertBox(h('div', null, Object.values(roles).map((r) => h('div', null, h('strong', null, r.label), ': ', r.perms.length ? r.perms.map((p) => p.replace('.', ' ')).join(', ') : 'their own attendance, leave and payslips')),
-      h('div', { class: 'mt-8' }, 'Line managers need no special role: anyone with people under them on the organogram sees their team and approves their requests.')), 'info', 'key')),
+  body.append(card('Users', h('div', null,
+    h('div', { style: { padding: '14px 18px 0' } }, alertBox(h('div', null, 'Each person’s role decides what they may do. See and change the rights of each role, or add your own roles, under ',
+      h('a', { href: '#/settings/roles' }, 'Roles & rights'), '. Line managers need no special role: anyone with people under them on the organogram sees their team and approves their requests.'), 'info', 'key')),
     table({
       rows, search: 'Search…', onRow: (u) => edit(u),
       columns: [
         { key: 'name', label: 'User', sort: true, render: (u) => h('div', null, h('div', { class: 'strong' }, u.name), h('div', { class: 'tiny muted' }, `@${u.username}${u.email ? ` · ${u.email}` : ''}`)) },
-        { key: 'role', label: 'Role', sort: true, render: (u) => badge(roles[u.role] ? roles[u.role].label : u.role, u.role === 'admin' ? 'brand' : '') },
+        { key: 'role', label: 'Role', sort: true, render: (u) => badge(roleList[u.role] ? roleList[u.role].label : u.role, u.role === 'admin' ? 'brand' : '') },
         { key: 'employee', label: 'Employee', render: (u) => (u.employee_id ? lookupName('employees', u.employee_id) : h('span', { class: 'faint' }, '—')) },
         { key: 'last_login_at', label: 'Last sign-in', sort: true, render: (u) => (u.last_login_at ? utcToLocal(u.last_login_at) : 'Never') },
         { key: 'active', label: '', render: (u) => (u.active && u.user_active ? badge('Active', 'ok') : badge('Off')) },

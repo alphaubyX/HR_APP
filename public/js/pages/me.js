@@ -168,7 +168,7 @@ async function checkin(body) {
     makeMap(mapEl, { lat: d.fences[0].lat, lng: d.fences[0].lng, zoom: 16 }).then((m) => {
       mapObj = m;
       for (const f of d.fences) {
-        const c = m.L.circle([f.lat, f.lng], { radius: f.radius_m, color: '#4f46e5', weight: 2, fillOpacity: 0.12 }).addTo(m.map).bindTooltip(h('span', null, f.name));
+        const c = m.L.circle([f.lat, f.lng], { radius: f.radius_m, color: '#1f72a6', weight: 2, fillOpacity: 0.12 }).addTo(m.map).bindTooltip(h('span', null, f.name));
         fenceLayers.push(c);
       }
       if (fenceLayers.length > 1) m.map.fitBounds(m.L.featureGroup(fenceLayers).getBounds().pad(0.2));

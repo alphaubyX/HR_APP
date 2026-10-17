@@ -1,5 +1,7 @@
 'use strict';
 
+const { seedRoles } = require('./roles');
+
 /** A new organization starts with sensible defaults it can change under Settings. */
 
 const { utcNow } = require('../lib/dates');
@@ -75,6 +77,7 @@ async function createOrg(db, { name, code, currency = 'PKR', timezone = 'Asia/Ka
       name, code, currency, timezone, country, plan, status: 'active', settings: JSON.stringify(orgSettings({})), created_at: utcNow(),
     });
     await seedOrg(t, id);
+    await seedRoles(t, id);
     return id;
   });
 }

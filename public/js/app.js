@@ -78,7 +78,7 @@ function navItems() {
   const staff = can('employees.view', 'payroll.view', 'attendance.view', 'leave.view');
   g(null, [
     { path: 'dashboard', label: 'Dashboard', icon: 'home', show: staff || isManager() },
-    (S.approvals > 0 || isManager() || can('leave.manage', 'attendance.manage')) && { path: 'approvals', label: 'Approvals', icon: 'inbox', count: S.approvals },
+    (S.approvals > 0 || isManager() || can('leave.manage', 'attendance.manage', 'employees.edit', 'salary.edit', 'org.manage', 'workflows.manage')) && { path: 'approvals', label: 'Approvals', icon: 'inbox', count: S.approvals },
   ].filter((x) => x && x.show !== false));
   if (hasEmployee()) {
     g('My space', [
@@ -139,7 +139,7 @@ function drawShell() {
   const me = S.me;
   clear(shell.side,
     h('div', { class: 'side-head' },
-      h('div', { class: 'brand' }, h('span', { class: 'brand-mark' }, icon('users', 18)), h('div', null, 'Broadwing HR', h('small', null, 'People · Time · Payroll'))),
+      brandMark(),
       me.org ? h('button', { class: 'org-switch', type: 'button', onclick: (e) => orgMenu(e.currentTarget) },
         orgLogo(me.org), h('div', { class: 'grow' }, h('div', { class: 'ellipsis strong' }, me.org.name), h('div', { class: 'tiny', style: { color: '#94a3b8' } }, me.support ? 'Support access' : me.roleLabel)),
         me.orgs.length > 1 || me.user.is_owner ? icon('down', 14) : null) : null),
@@ -154,6 +154,7 @@ function drawShell() {
   const searchBox = can('employees.view') || isManager() ? employeeSearch() : null;
   clear(shell.top,
     h('button', { class: 'icon-btn menu-btn', 'aria-label': 'Menu', onclick: () => shell.el.classList.toggle('nav-open') }, icon('menu')),
+    h('a', { class: 'topbar-brand', href: '#/', 'aria-label': 'Broadwing HR' }, h('img', { src: '/img/wing-white.svg', alt: '' }), h('span', { class: 'brand-name' }, 'HR')),
     h('div', { class: 'spacer' }), searchBox,
     h('button', { class: 'icon-btn', title: 'Theme', 'aria-label': 'Change theme', onclick: (e) => themeMenu(e.currentTarget) }, icon(document.documentElement.dataset.theme === 'dark' ? 'moon' : 'sun')),
     h('button', { class: 'icon-btn', title: 'Notifications', 'aria-label': 'Notifications', onclick: (e) => notifications(e.currentTarget) },
@@ -166,6 +167,12 @@ function drawShell() {
       can('employees.view') || isManager() ? ['dashboard', 'More', 'home'] : ['me/profile', 'Me', 'user']]
     : [['dashboard', 'Home', 'home'], ['employees', 'People', 'users'], ['attendance', 'Time', 'clock'], ['leave', 'Leave', 'calendar'], ['settings', 'Settings', 'settings']];
   clear(shell.bottom, quick.map(([p, l, ic]) => h('a', { href: `#/${p}`, class: p === path ? 'on' : '' }, icon(ic, 20), l)));
+}
+
+/** The Broadwing wing and name, as on the main Broadwing site. */
+function brandMark() {
+  return h('div', { class: 'brand' }, h('img', { class: 'brand-mark', src: '/img/wing-white.svg', alt: '' }),
+    h('span', { class: 'brand-name' }, 'Broad Wing', h('b', null, 'HR')));
 }
 
 // "/" anywhere opens the person finder of the current top bar
@@ -309,7 +316,7 @@ async function refreshCounts() {
     const d = await api.get('/api/me');
     S.me = d;
     const counts = await api.get('/api/dashboard').catch(() => null);
-    if (counts) S.approvals = counts.approvals.leave + counts.approvals.corrections;
+    if (counts) S.approvals = counts.approvals.leave + counts.approvals.corrections + (counts.approvals.requests || 0);
     drawShell();
   } catch { /* ignore */ }
 }
@@ -323,7 +330,7 @@ async function showLogin() {
   const feats = [['users', 'Employees & onboarding'], ['org', 'Drag-and-drop organogram'], ['calendar', 'Leave with approvals'], ['finger', 'Machine & mobile attendance'], ['pin', 'Geofenced check-in'], ['wallet', 'Payroll & payslips']];
   clear(root, h('div', { class: 'auth' },
     h('div', { class: 'auth-art' },
-      h('div', { class: 'brand' }, h('span', { class: 'brand-mark' }, icon('users', 18)), h('div', null, 'Broadwing HR', h('small', null, 'Part of the Broadwing suite'))),
+      brandMark(),
       h('div', null, h('h1', null, 'Your people, time and payroll in one place.'), h('p', null, 'From onboarding and probation to attendance, leave approvals and payslips — built for growing teams.')),
       h('div', { class: 'auth-feats' }, feats.map(([i, t]) => h('div', { class: 'auth-feat' }, icon(i, 18), t)))),
     h('div', { class: 'auth-form' }, box)));
@@ -379,7 +386,7 @@ async function start() {
   }
   if (S.me.org) {
     loadLookups().catch(() => {});
-    api.get('/api/dashboard').then((d) => { S.approvals = d.approvals.leave + d.approvals.corrections; if (shell) drawShell(); }).catch(() => {});
+    api.get('/api/dashboard').then((d) => { S.approvals = d.approvals.leave + d.approvals.corrections + (d.approvals.requests || 0); if (shell) drawShell(); }).catch(() => {});
   }
   shell = null;
   if (location.hash === '#signup') location.hash = '';

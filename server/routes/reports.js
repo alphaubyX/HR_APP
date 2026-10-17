@@ -24,6 +24,7 @@ module.exports = function reportRoutes(r, { db }) {
       corrections: Number(req.perms.has('attendance.manage')
         ? await db.value("SELECT COUNT(*) FROM regularizations WHERE org_id = ? AND status = 'pending'", [orgId])
         : await db.value("SELECT COUNT(*) FROM regularizations WHERE org_id = ? AND status = 'pending' AND approver_employee_id = ?", [orgId, empId])),
+      requests: await require('../services/workflows').waitingCount(db, req),
     };
 
     if (scope.all || (scope.team && scope.team.size)) {

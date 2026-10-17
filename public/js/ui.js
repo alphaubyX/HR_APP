@@ -90,7 +90,7 @@ export const titleCase = (s) => String(s || '').replace(/_/g, ' ').replace(/\b\w
 export const sentence = (s) => { s = String(s || '').replace(/_/g, ' '); return s.charAt(0).toUpperCase() + s.slice(1); };
 
 /* ------------------------------------------------------------------ avatars & badges */
-const PALETTE = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#db2777', '#7c3aed', '#2563eb', '#dc2626', '#0d9488', '#9333ea'];
+const PALETTE = ['#1f72a6', '#0891b2', '#059669', '#d97706', '#db2777', '#7c3aed', '#2563eb', '#dc2626', '#0d9488', '#9333ea'];
 export function colorFor(s) { let x = 0; for (const c of String(s)) x = (x * 31 + c.charCodeAt(0)) >>> 0; return PALETTE[x % PALETTE.length]; }
 export function initials(name) { return String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join(''); }
 export function avatar(name, { photo = null, size = '', id = null } = {}) {
@@ -136,11 +136,19 @@ export function attBadge(d) {
 
 /* ------------------------------------------------------------------ feedback */
 let toastBox;
+let pendingAt = 0;
+// An action kept for approval: tell the person, and hold back the page's "Saved" message that follows.
+window.addEventListener('hr:pending-approval', (e) => {
+  pendingAt = 0;
+  toast(e.detail.message || 'Sent for approval.', 'pending');
+  pendingAt = Date.now();
+});
 export function toast(message, kind = 'ok') {
+  if (kind === 'ok' && Date.now() - pendingAt < 2500) return;
   if (!toastBox) { toastBox = h('div', { class: 'toasts', role: 'status' }); document.body.append(toastBox); }
-  const t = h('div', { class: ['toast', kind] }, icon(kind === 'bad' ? 'alert' : 'checkCircle', 18), h('span', null, message));
+  const t = h('div', { class: ['toast', kind] }, icon(kind === 'bad' ? 'alert' : kind === 'pending' ? 'clock' : 'checkCircle', 18), h('span', null, message));
   toastBox.append(t);
-  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300); }, kind === 'bad' ? 5000 : 3000);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300); }, kind === 'bad' || kind === 'pending' ? 6000 : 3000);
 }
 export function errorToast(err) { toast(err && err.message ? err.message : String(err), 'bad'); }
 

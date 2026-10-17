@@ -647,9 +647,10 @@ module.exports = function employeeRoutes(r, { db, options }) {
     const e = await load(req, req.params.id);
     if (await db.get('SELECT id FROM memberships WHERE org_id = ? AND employee_id = ?', [req.org.id, e.id])) throw bad('This person already has an account.');
     const { createUser, cleanUsername } = require('../services/accounts');
+    const role = req.body?.role ? String(req.body.role) : 'employee';
+    await require('../services/roles').checkRoleAssign(db, req, role);
     const uname = cleanUsername(req.body?.username);
     const userId = await createUser(db, { username: uname, name: fullName(e), email: e.email, password: req.body?.password });
-    const role = ['employee', 'hr', 'payroll'].includes(req.body?.role) ? req.body.role : 'employee';
     await db.insert('memberships', { user_id: userId, org_id: req.org.id, role, employee_id: e.id, created_at: utcNow() });
     await audit(db, req, 'users.create', 'employees', e.id, { username: uname, role });
     res.json({ ok: true });

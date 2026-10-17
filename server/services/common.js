@@ -34,8 +34,8 @@ async function notifyUsers(db, orgId, userIds, title, body = null, link = null) 
 
 /** Users holding a permission in an organization (e.g. HR for leave requests nobody else can approve). */
 async function usersWithPerm(db, orgId, perm) {
-  const { ROLES } = require('../lib/auth');
-  const roles = Object.entries(ROLES).filter(([, r]) => r.perms.includes(perm)).map(([k]) => k);
+  const { rolesWithPerm } = require('./roles');
+  const roles = await rolesWithPerm(db, orgId, perm);
   const rows = await db.all(
     `SELECT m.user_id, m.employee_id FROM memberships m JOIN users u ON u.id = m.user_id
      WHERE m.org_id = ? AND m.active = 1 AND u.active = 1 AND m.role IN (${roles.map(() => '?').join(',')})`,

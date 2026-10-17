@@ -55,7 +55,7 @@ module.exports = function authRoutes(r, { db, options, setCookie, SESSION_DAYS }
         settings: req.org.settings, plan: req.org.plan, status: req.org.status,
       } : null,
       role: req.member ? req.member.role : null,
-      roleLabel: req.member ? (ROLES[req.member.role] || ROLES.employee).label : null,
+      roleLabel: req.member ? req.roleName || (ROLES[req.member.role] || ROLES.employee).label : null,
       support: !!(req.member && req.member.support),
       perms: [...req.perms],
       employee,

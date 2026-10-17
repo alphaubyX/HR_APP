@@ -25,6 +25,17 @@ const MIGRATIONS = [
       await addColumn(db, 'employees', 'section_id');
     },
   },
+  {
+    // roles you can change, approval workflows
+    version: 3,
+    async up(db) {
+      for (const t of ['roles', 'workflows', 'approval_requests']) {
+        for (const stmt of tableDdl(t, TABLES[t], db.dialect)) await db.run(stmt);
+      }
+      const { seedRoles } = require('../services/roles');
+      for (const o of await db.all('SELECT id FROM orgs')) await seedRoles(db, o.id);
+    },
+  },
 ];
 
 /** Add a column unless it is already there (a new database gets it from version 1). */

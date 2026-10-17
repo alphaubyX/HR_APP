@@ -169,7 +169,7 @@ export default async function employeeForm(view, params) {
     { name: 'create', label: 'Create a sign-in for this employee', type: 'checkbox', default: false, help: 'They can then check in from their phone, apply for leave and see payslips.' },
     { name: 'username', label: 'Username', show: (v) => v.create, help: 'e.g. their first name and a number.' },
     { name: 'password', label: 'Temporary password', type: 'text', show: (v) => v.create, help: 'At least 8 characters. Ask them to change it after signing in.' },
-    { name: 'role', label: 'Role', type: 'select', show: (v) => v.create, options: [['employee', 'Employee (self-service)'], ['hr', 'HR manager'], ['payroll', 'Payroll officer']] },
+    { name: 'role', label: 'Role', type: 'select', show: (v) => v.create, options: () => (S.lookups.roles || []).filter((r) => r.role_key !== 'admin' || S.me.role === 'admin').map((r) => [r.role_key, r.name]) },
   ], { role: 'employee' });
   const steps = [
     { title: 'Personal details', sub: 'Who are they?', body: h('div', null, h('div', { class: 'mb-16' }, photo.el), forms.personal.el), check: () => forms.personal.validate() },
@@ -204,7 +204,21 @@ export default async function employeeForm(view, params) {
     btn.disabled = true;
     try {
       const data = collect();
-      const { id } = await api.post('/api/employees', data);
+      const created = await api.post('/api/employees', data);
+      if (created && created.pending) {
+        // waits for approval: the salary, geofences and sign-in are added when it is approved
+        const calls = [{ method: 'PUT', path: '/employees/{id}/geofences', body: { branch_ids: fences.value() }, label: 'Geofences' }];
+        if (salary) {
+          const sv = salary.value();
+          if (sv.gross || sv.lines.some((l) => l.calc === 'fixed' && l.value)) calls.push({ method: 'POST', path: '/employees/{id}/salary', body: { ...sv, effective_from: data.join_date, reason: 'Joining salary' }, label: 'Salary' });
+        }
+        const acc = account.values();
+        if (acc.create) calls.push({ method: 'POST', path: '/employees/{id}/account', body: acc, label: 'Sign-in' });
+        await api.post(`/api/approvals/${created.approval_id}/followups`, { calls });
+        navigate('/approvals?tab=sent');
+        return;
+      }
+      const { id } = created;
       const problems = [];
       try { await api.put(`/api/employees/${id}/geofences`, { branch_ids: fences.value() }); } catch (x) { problems.push(x.message); }
       if (salary) {

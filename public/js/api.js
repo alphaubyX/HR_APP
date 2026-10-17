@@ -26,6 +26,8 @@ async function request(method, url, body) {
     if (res.status === 401 && !url.startsWith('/api/login')) window.dispatchEvent(new Event('hr:signed-out'));
     throw new ApiError(res.status, (data && data.error) || `Request failed (${res.status})`);
   }
+  // kept for approval instead of done: say so (the page's own "Saved" message is held back)
+  if (res.status === 202 && data && data.pending) window.dispatchEvent(new CustomEvent('hr:pending-approval', { detail: data }));
   // something was saved: lists kept in the page (departments, people …) must be read again
   if (method !== 'GET' && !url.startsWith('/api/login')) window.dispatchEvent(new Event('hr:data-changed'));
   return data;

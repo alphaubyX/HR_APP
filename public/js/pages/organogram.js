@@ -642,7 +642,7 @@ export default async function organogram(view, params, query) {
         strengthField,
         { name: 'color', label: 'Colour', type: 'color' },
       ],
-      values: d ? { ...d, color: d.color || '#4f46e5' } : { color: '#4f46e5', ...preset },
+      values: d ? { ...d, color: d.color || '#1f72a6' } : { color: '#1f72a6', ...preset },
       danger: d && manage ? { label: 'Delete', onClick: () => remove('departments', d) } : null,
       onSubmit: (v) => (d ? api.put(`/api/departments/${d.id}`, v) : api.post('/api/departments', v)),
     });

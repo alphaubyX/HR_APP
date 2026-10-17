@@ -59,7 +59,7 @@ async function calendar(body) {
       cells.push(h('div', { class: [day.slice(0, 7) !== month && 'other', day === today && 'today'] },
         h('span', { class: 'd' }, String(Number(day.slice(8)))),
         hol.map((x) => h('div', { class: 'ev hol', title: x.note || x.name }, x.name)),
-        lv.slice(0, 4).map((x) => h('div', { class: ['ev', x.status === 'pending' && 'pending'], style: { background: `color-mix(in srgb, ${x.color || '#4f46e5'} 16%, transparent)`, color: x.color || 'var(--brand)' }, title: `${x.name} · ${x.type_name}${x.status === 'pending' ? ' (pending)' : ''}` }, `${x.name.split(' ')[0]}${x.half_day !== 'none' ? ' ½' : ''}`)),
+        lv.slice(0, 4).map((x) => h('div', { class: ['ev', x.status === 'pending' && 'pending'], style: { background: `color-mix(in srgb, ${x.color || '#1f72a6'} 16%, transparent)`, color: x.color || 'var(--brand)' }, title: `${x.name} · ${x.type_name}${x.status === 'pending' ? ' (pending)' : ''}` }, `${x.name.split(' ')[0]}${x.half_day !== 'none' ? ' ½' : ''}`)),
         lv.length > 4 ? h('div', { class: 'tiny muted' }, `+${lv.length - 4} more`) : null));
     }
     clear(holder, h('div', { class: 'card', style: { overflow: 'hidden' } }, h('div', { class: 'cal' }, DOW.map((x) => h('div', { class: 'dow' }, x)), cells)),

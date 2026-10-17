@@ -58,12 +58,26 @@ const TABLES = {
       id: 'id',
       user_id: 'int!',
       org_id: 'int!',
-      role: 'str:20!=employee', // admin | hr | payroll | employee  (line managers are found from the organogram)
+      role: 'str:20!=employee', // a roles.role_key: admin | hr | payroll | employee | your own (line managers come from the organogram)
       employee_id: 'int',
       active: 'bool!=1',
       created_at: 'datetime!',
     },
     indexes: [['user_id,org_id', 'unique'], ['org_id'], ['employee_id']],
+  },
+  roles: {
+    cols: {
+      id: 'id',
+      org_id: 'int!',
+      role_key: 'str:20!', // what memberships.role holds
+      name: 'str:80!',
+      description: 'str:300',
+      perms: 'text', // JSON list of rights (lib/auth PERMISSIONS)
+      is_system: 'bool!=0', // one of the starting roles: can be changed but not deleted
+      sort: 'int!=0',
+      created_at: 'datetime!',
+    },
+    indexes: [['org_id,role_key', 'unique']],
   },
   sessions: {
     cols: {
@@ -104,6 +118,43 @@ const TABLES = {
       created_at: 'datetime!',
     },
     indexes: [['user_id,org_id,read_at']],
+  },
+  /* -------------------------------------------------- approval workflows */
+  workflows: {
+    cols: {
+      id: 'id',
+      org_id: 'int!',
+      action: 'str:60!', // services/workflows ACTIONS key, e.g. employee.create
+      active: 'bool!=1',
+      steps: 'text', // JSON [{ type: role | user | initiator_manager | employee_manager | department_head, role_key, user_id }]
+      note: 'str:300',
+      updated_at: 'datetime',
+      created_at: 'datetime!',
+    },
+    indexes: [['org_id,action', 'unique']],
+  },
+  approval_requests: {
+    cols: {
+      id: 'id',
+      org_id: 'int!',
+      workflow_id: 'int',
+      action: 'str:60!',
+      title: 'str:250!',
+      method: 'str:10!',
+      path: 'str:250!', // the API call that runs once everyone has approved
+      body: 'text', // its JSON body
+      followups: 'text', // JSON calls to make after it, e.g. salary for a new employee ({id} = the new record)
+      initiator_user_id: 'int!',
+      employee_id: 'int', // who it is about, when it is about someone
+      steps: 'text', // JSON [{ label, approvers: [user ids], status: waiting | approved | skipped, by, at, comment }]
+      step: 'int!=0',
+      status: 'str:20!=pending', // pending | approved | rejected | cancelled | failed
+      result: 'text',
+      error: 'str:500',
+      created_at: 'datetime!',
+      decided_at: 'datetime',
+    },
+    indexes: [['org_id,status'], ['initiator_user_id']],
   },
   jobs: {
     cols: { id: 'id', name: 'str:80!', last_run_key: 'str:40', last_run_at: 'datetime' },

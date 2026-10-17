@@ -4,7 +4,9 @@ const path = require('node:path');
 const express = require('express');
 const { migrate } = require('./db/migrate');
 const { HttpError } = require('./lib/validate');
-const { sha256, permsFor, ROLES } = require('./lib/auth');
+const { sha256, ROLES } = require('./lib/auth');
+const { roleInfo } = require('./services/roles');
+const workflows = require('./services/workflows');
 const { utcNow, utcPlus } = require('./lib/dates');
 const { orgSettings } = require('./engine/policy');
 
@@ -62,6 +64,12 @@ async function createApp(options) {
   app.use('/api', async (req, res, next) => {
     req.db = db;
     req.perms = new Set();
+    if (req[workflows.INTERNAL]) { // an approved request being carried out in its initiator's name
+      const { userId, orgId } = req[workflows.INTERNAL];
+      req.user = await db.get('SELECT id, username, email, name, is_owner, active, last_org_id FROM users WHERE id = ?', [userId]);
+      if (req.user) await openOrg(req, orgId);
+      return next();
+    }
     const header = req.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice(7).trim() : readCookie(req, COOKIE);
     if (!token) return next();
@@ -72,17 +80,7 @@ async function createApp(options) {
     req.session = session;
     req.sessionToken = token;
     req.user = user;
-    if (session.org_id) {
-      const org = await db.get('SELECT * FROM orgs WHERE id = ?', [session.org_id]);
-      let member = org ? await db.get('SELECT * FROM memberships WHERE user_id = ? AND org_id = ? AND active = 1', [user.id, org.id]) : null;
-      if (org && !member && user.is_owner) member = { role: 'admin', employee_id: null, support: true }; // server owner helping a customer
-      if (org && member && (org.status === 'active' || user.is_owner)) {
-        org.settings = orgSettings(org.settings);
-        req.org = org;
-        req.member = member;
-        req.perms = permsFor(member.role);
-      }
-    }
+    if (session.org_id) await openOrg(req, session.org_id);
     // keep a lasting session alive while it's used
     if (session.expires_at < utcPlus((SESSION_DAYS - 1) * 86400000)) {
       const expires = utcPlus(SESSION_DAYS * 86400000);
@@ -91,6 +89,22 @@ async function createApp(options) {
     }
     next();
   });
+
+  /** The organization the user works in, their membership and the rights of their role. */
+  async function openOrg(req, orgId) {
+    const { user } = req;
+    const org = await db.get('SELECT * FROM orgs WHERE id = ?', [orgId]);
+    let member = org ? await db.get('SELECT * FROM memberships WHERE user_id = ? AND org_id = ? AND active = 1', [user.id, org.id]) : null;
+    if (org && !member && user.is_owner) member = { role: 'admin', employee_id: null, support: true }; // server owner helping a customer
+    if (org && member && (org.status === 'active' || user.is_owner)) {
+      org.settings = orgSettings(org.settings);
+      req.org = org;
+      req.member = member;
+      const role = await roleInfo(db, org.id, member.role);
+      req.perms = role.perms;
+      req.roleName = role.name;
+    }
+  }
 
   function setCookie(req, res, token) {
     res.cookie(COOKIE, token, {
@@ -101,12 +115,14 @@ async function createApp(options) {
   app.locals.clearCookie = (res) => res.clearCookie(COOKIE, { path: '/' });
   app.locals.SESSION_DAYS = SESSION_DAYS;
 
-  const ctx = { db, options, setCookie, COOKIE, SESSION_DAYS, ROLES };
+  const ctx = { db, options, setCookie, COOKIE, SESSION_DAYS, ROLES, app };
+  // actions with an approval workflow switched on are kept for approval instead of being done
+  app.use('/api', workflows.gate(ctx));
   // Listed one by one (not loaded by name) so the single-file build for hosting includes them all.
   const routers = [
     require('./routes/auth'), require('./routes/platform'), require('./routes/org'), require('./routes/employees'),
     require('./routes/salary'), require('./routes/leave'), require('./routes/attendance'), require('./routes/payroll'),
-    require('./routes/reports'),
+    require('./routes/reports'), require('./routes/workflows'),
   ];
   for (const register of routers) {
     const router = express.Router();
