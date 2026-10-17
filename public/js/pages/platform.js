@@ -59,9 +59,9 @@ export default async function platform(view) {
 function brandingCard(reload) {
   const b = S.me.brand || {};
   const slots = [
-    ['mark', 'Wing (icon)', 'The wing on its own. Used as the browser tab icon and on phones.'],
-    ['horizontal', 'Logo for the menu bar', 'Wing and “BROAD WING” side by side, like the top bar of broadwing.one.'],
-    ['logo', 'Full logo', 'The stacked logo (wing above the name). Shown on the sign-in page.'],
+    ['mark', 'Wing (icon)', 'The wing on its own, in colour. The browser tab icon; shown in white on the phone bar.'],
+    ['horizontal', 'White logo for the menu bar', 'White wing and “BROAD WING” side by side, as on broadwing.one’s blue top bar.'],
+    ['logo', 'Full logo', 'The stacked colour logo (wing above the name). Shown on the sign-in page.'],
   ];
   const upload = async (slot) => {
     const file = await pickFile('image/png,image/svg+xml,image/webp');
@@ -74,12 +74,12 @@ function brandingCard(reload) {
     try { await api.put(`/api/platform/brand/${slot}`, { data: null }); toast('Removed'); location.reload(); } catch (e) { errorToast(e); }
   };
   return card('Branding', h('div', { class: 'card-body' },
-    h('p', { class: 'muted small mb-16' }, 'Upload Broadwing’s original logo files (PNG with a transparent background, or SVG). On the blue bars the app shows them in white automatically. They are kept in the database, so app updates never replace them.'),
+    h('p', { class: 'muted small mb-16' }, 'Broadwing’s original logos are built in. Upload a replacement only to change one (PNG with a transparent background, or SVG). Uploads are kept in the database, so app updates never replace them.'),
     h('div', { class: 'brand-slots' }, slots.map(([slot, title, help]) => h('div', { class: 'brand-slot' },
       h('div', { class: 'brand-previews' },
-        h('div', { class: 'on-white' }, h('img', { src: `/brand/${slot}?v=${b.v || 0}`, alt: '' })),
-        h('div', { class: 'on-blue' }, h('img', { class: 'on-dark', src: `/brand/${slot}?v=${b.v || 0}`, alt: '' }))),
-      h('div', { class: 'strong mt-8' }, title, b[slot] ? null : h('span', { class: 'tiny muted' }, ' · built-in wing')),
+        slot === 'horizontal' ? null : h('div', { class: 'on-white' }, h('img', { src: `/brand/${slot}?v=${b.v || 0}`, alt: '' })),
+        slot === 'logo' ? null : h('div', { class: 'on-blue' }, h('img', { class: slot === 'mark' ? 'on-dark' : '', src: `/brand/${slot}?v=${b.v || 0}`, alt: '' }))),
+      h('div', { class: 'strong mt-8' }, title, b[slot] ? h('span', { class: 'tiny muted' }, ' · uploaded') : h('span', { class: 'tiny muted' }, ' · Broadwing original')),
       h('div', { class: 'tiny muted' }, help),
       h('div', { class: 'row mt-8', style: { gap: '6px' } },
         h('button', { class: 'btn sm', onclick: () => upload(slot) }, icon('upload', 14), b[slot] ? 'Replace' : 'Upload'),

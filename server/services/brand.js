@@ -3,12 +3,13 @@
 /**
  * The product's own logos (the server owner uploads Broadwing's original artwork once). They live
  * in the database, so updating the app's files never replaces them.
- *   mark        the wing on its own: favicon, phone top bar
- *   horizontal  wing and name side by side: the side menu bar
- *   logo        the full stacked logo: the sign-in page
- * White versions for the blue bars are made in the browser from the same files.
+ *   mark        the wing on its own, in colour: favicon
+ *   horizontal  white wing and name side by side: the blue menu bar
+ *   logo        the full stacked logo in colour: the sign-in page
+ * Broadwing's original artwork is built in (public/img/brand) and used until something is uploaded.
  */
 
+const path = require('node:path');
 const { bad } = require('../lib/validate');
 const { utcNow } = require('../lib/dates');
 
@@ -36,10 +37,14 @@ async function saveBrand(db, slot, dataUrl) {
   else await db.insert('platform_settings', { skey: key, value: dataUrl, updated_at: utcNow() });
 }
 
-/** Express handler for /brand/:slot — the uploaded image, or the built-in wing. */
-function serveBrand(db, fallbackFile) {
+// Broadwing's own artwork, used until the owner uploads something else
+const BUILT_IN = { mark: 'wing.png', horizontal: 'logo-white.png', logo: 'logo.png' };
+
+/** Express handler for /brand/:slot — the uploaded image, or Broadwing's built-in logo. */
+function serveBrand(db, brandDir) {
   return async (req, res) => {
-    const slot = String(req.params.slot || '').replace(/\.\w+$/, '');
+    const slot = String(req.params.slot || 'mark').replace(/\.\w+$/, '');
+    const fallbackFile = path.join(brandDir, BUILT_IN[slot] || BUILT_IN.mark);
     const row = SLOTS.includes(slot) ? await db.get('SELECT value FROM platform_settings WHERE skey = ?', [`brand_${slot}`]) : null;
     const m = row && row.value && row.value.match(IMAGE);
     res.set('Cache-Control', 'public, max-age=300');

@@ -141,8 +141,8 @@ async function createApp(options) {
     },
   }));
   // the product logos (uploaded by the server owner, or the built-in wing) and the public job page
-  app.get('/brand/:slot', serveBrand(db, path.join(pub, 'img', 'icon.svg')));
-  app.get('/favicon.ico', serveBrand(db, path.join(pub, 'img', 'icon.svg')));
+  app.get('/brand/:slot', serveBrand(db, path.join(pub, 'img', 'brand')));
+  app.get('/favicon.ico', serveBrand(db, path.join(pub, 'img', 'brand')));
   app.get('/apply/:token', (req, res) => res.sendFile(path.join(pub, 'apply.html')));
   app.get(/^\/(?!api\/|iclock\/).*/, (req, res) => res.sendFile(path.join(pub, 'index.html')));
 

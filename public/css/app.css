@@ -116,7 +116,6 @@ img { max-width: 100%; }
   height: var(--top-h); display: flex; align-items: center; gap: 10px; padding: 0 18px; color: #fff;
   background: var(--bw-start, #17669a); box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .08);
 }
-.brand-mark { width: 34px; height: 24px; flex: none; display: block; }
 .brand-name { font-weight: 300; font-size: 16px; letter-spacing: .08em; text-transform: uppercase; line-height: 1; white-space: nowrap; }
 .brand-name b { font-weight: 600; letter-spacing: .04em; margin-left: 6px; padding: 2px 6px; border-radius: 5px; background: rgba(255, 255, 255, .16); font-size: 11px; vertical-align: 2px; }
 .org-switch {
@@ -152,7 +151,7 @@ img { max-width: 100%; }
 .topbar .icon-btn .dot { border-color: #2479ad; }
 .topbar .user-chip .avatar { box-shadow: 0 0 0 2px rgba(255, 255, 255, .5); }
 .topbar-brand { display: none; align-items: center; gap: 8px; color: #fff; }
-.topbar-brand img { width: 30px; height: 21px; }
+.topbar-brand img { width: 36px; height: 22px; object-fit: contain; }
 .topbar .menu-btn { display: none; }
 .search {
   display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
@@ -388,11 +387,14 @@ table.table { width: 100%; border-collapse: separate; border-spacing: 0; }
 .auth-feat { background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px; padding: 12px 14px; display: flex; gap: 10px; align-items: center; font-weight: 500; }
 .auth-feat svg { color: #b9def3; flex: none; }
 .auth-art .brand { background: none; box-shadow: none; padding: 0; height: auto; }
-.auth-art .brand-mark { width: 46px; height: 32px; }
+.auth-art .brand-wide { height: 40px; max-width: 280px; }
 .auth-art .brand-name { font-size: 20px; }
 .auth-form { display: grid; place-items: center; padding: 32px; }
 .auth-box { width: min(400px, 100%); }
 .auth-box h2 { font-size: 24px; margin-bottom: 6px; }
+.auth-col { width: min(400px, 100%); display: flex; flex-direction: column; align-items: center; }
+.auth-col .auth-box { width: 100%; }
+.auth-logo { width: 190px; max-width: 60%; margin-bottom: 28px; }
 
 /* ---------------------------------------------------------------- employee profile */
 .profile-hero { display: flex; gap: 18px; align-items: center; padding: 20px; }
@@ -663,13 +665,10 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
 
 /* uploaded logos: white on the blue bars */
 .on-dark { filter: brightness(0) invert(1); }
-.brand-wide { height: 26px; max-width: 160px; object-fit: contain; display: block; }
-.brand img.brand-mark { object-fit: contain; }
-.auth-art .brand-big { flex-direction: column; align-items: flex-start; gap: 10px; }
-.auth-art .brand-logo { height: 96px; max-width: 260px; object-fit: contain; }
+.brand-wide { height: 24px; max-width: 170px; object-fit: contain; display: block; }
 .topbar-brand img { object-fit: contain; }
 .brand-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
-.brand-previews { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; height: 90px; }
+.brand-previews { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; height: 90px; }
 .brand-previews > div { display: grid; place-items: center; padding: 10px; }
 .brand-previews .on-white { background: #fff; }
 .brand-previews .on-blue { background: var(--bw-bar); }
@@ -678,7 +677,7 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
 /* public job application page */
 .apply-page { background: var(--bg); min-height: 100vh; }
 .apply-bar { height: 60px; display: flex; align-items: center; gap: 12px; padding: 0 20px; background: var(--bw-bar); color: #fff; font-weight: 600; letter-spacing: .02em; }
-.apply-bar img { width: 34px; height: 24px; object-fit: contain; }
+.apply-bar img { width: 40px; height: 25px; object-fit: contain; }
 .apply-main { max-width: 760px; margin: 0 auto; padding: 24px 16px 60px; }
 .apply-card { padding: 28px; }
 .apply-card h1 { font-size: 26px; }

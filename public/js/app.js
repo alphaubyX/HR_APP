@@ -158,7 +158,7 @@ function drawShell() {
   const searchBox = can('employees.view') || isManager() ? employeeSearch() : null;
   clear(shell.top,
     h('button', { class: 'icon-btn menu-btn', 'aria-label': 'Menu', onclick: () => shell.el.classList.toggle('nav-open') }, icon('menu')),
-    h('a', { class: 'topbar-brand', href: '#/', 'aria-label': 'Broadwing HR' }, wingImg(''), h('span', { class: 'brand-name' }, 'HR')),
+    h('a', { class: 'topbar-brand', href: '#/', 'aria-label': 'Broadwing HR' }, wingImg(), h('span', { class: 'brand-name' }, 'HR')),
     h('div', { class: 'spacer' }), searchBox,
     h('button', { class: 'icon-btn', title: 'Theme', 'aria-label': 'Change theme', onclick: (e) => themeMenu(e.currentTarget) }, icon(document.documentElement.dataset.theme === 'dark' ? 'moon' : 'sun')),
     h('button', { class: 'icon-btn', title: 'Notifications', 'aria-label': 'Notifications', onclick: (e) => notifications(e.currentTarget) },
@@ -185,13 +185,12 @@ function setBrand(b) {
   if (link && b.mark) { link.href = `/brand/mark?v=${b.v}`; link.removeAttribute('type'); }
 }
 const brandSrc = (slot) => `/brand/${slot}?v=${brand.v}`;
-const wingImg = (cls = 'brand-mark') => (brand.mark ? h('img', { class: `${cls} on-dark`, src: brandSrc('mark'), alt: '' }) : h('img', { class: cls, src: '/img/wing-white.svg', alt: '' }));
+// the white wing for the blue phone bar: Broadwing's own, or the uploaded wing shown in white
+const wingImg = () => (brand.mark ? h('img', { class: 'on-dark', src: brandSrc('mark'), alt: '' }) : h('img', { src: '/img/brand/wing-white.png', alt: '' }));
 
-/** The Broadwing logo and name, as on the main Broadwing site. big = the sign-in page. */
+/** The white Broadwing logo on the blue bar, as on broadwing.one. big = the sign-in page. */
 function brandMark(big = false) {
-  if (big && brand.logo) return h('div', { class: 'brand brand-big' }, h('img', { class: 'brand-logo on-dark', src: brandSrc('logo'), alt: 'Broadwing' }), h('span', { class: 'brand-name' }, h('b', null, 'HR')));
-  if (brand.horizontal) return h('div', { class: 'brand' }, h('img', { class: 'brand-wide on-dark', src: brandSrc('horizontal'), alt: 'Broadwing' }), h('span', { class: 'brand-name' }, h('b', null, 'HR')));
-  return h('div', { class: 'brand' }, wingImg(), h('span', { class: 'brand-name' }, 'Broad Wing', h('b', null, 'HR')));
+  return h('div', { class: ['brand', big && 'brand-big'] }, h('img', { class: 'brand-wide', src: brandSrc('horizontal'), alt: 'Broad Wing' }), h('span', { class: 'brand-name' }, h('b', null, 'HR')));
 }
 
 // "/" anywhere opens the person finder of the current top bar
@@ -353,7 +352,7 @@ async function showLogin() {
       brandMark(true),
       h('div', null, h('h1', null, 'Your people, time and payroll in one place.'), h('p', null, 'From onboarding and probation to attendance, leave approvals and payslips — built for growing teams.')),
       h('div', { class: 'auth-feats' }, feats.map(([i, t]) => h('div', { class: 'auth-feat' }, icon(i, 18), t)))),
-    h('div', { class: 'auth-form' }, box)));
+    h('div', { class: 'auth-form' }, h('div', { class: 'auth-col' }, h('img', { class: 'auth-logo', src: brandSrc('logo'), alt: 'Broad Wing' }), box))));
 
   const err = h('div');
   const showErr = (e) => clear(err, h('div', { class: 'mt-16' }, alertBox(e.message, 'bad', 'alert')));
